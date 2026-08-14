@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TMF — Rankine Cycle Simulator v3.2</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+    :root {
+      --bg: #0a0c10;
+      --bg2: #10141c;
+      --bg3: #161b26;
+      --border: #1e2a3a;
+      --text: #c8d8e8;
+      --dim: #4a6070;
+      --cyan: #00d4ff;
+      --orange: #ff6b35;
+      --green: #00e896;
+      --yellow: #ffd166;
+      --purple: #b06cff;
+      --red: #ff4560;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(0, 212, 255, .015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, .015) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0
+    }
+
+    .hdr {
+      position: relative;
+      z-index: 1;
+      padding: 8px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0
+    }
+
+    .hdr h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff
+    }
+
+    .hdr h1 span {
+      color: var(--cyan)
+    }
+
+    .badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      border-radius: 3px
+    }
+
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      min-height: 0
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 210px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--bg2);
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px
+    }
+
+    .sec-lbl {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      letter-spacing: .12em;
+      color: var(--dim);
+      text-transform: uppercase;
+      padding: 2px 0 1px
+    }
+
+    .sl-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px
+    }
+
+    .sl-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline
+    }
+
+    .sl-name {
+      font-size: 11px;
+      color: var(--text)
+    }
+
+    .sl-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan)
+    }
+
+    input[type=range] {
+      width: 100%;
+      height: 3px;
+      -webkit-appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: var(--cyan);
+      border-radius: 50%
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1px 0
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px
+    }
+
+    .metric-box {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 6px
+    }
+
+    .metric-box .lbl {
+      font-size: 9px;
+      color: var(--dim);
+      font-family: 'IBM Plex Mono', monospace
+    }
+
+    .metric-box .val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      margin-top: 1px
+    }
+
+    .metric-box.wide {
+      grid-column: 1/-1
+    }
+
+    .val.green {
+      color: var(--green)
+    }
+
+    .val.orange {
+      color: var(--orange)
+    }
+
+    .val.yellow {
+      color: var(--yellow)
+    }
+
+    .val.purple {
+      color: var(--purple)
+    }
+
+    .val.red {
+      color: var(--red)
+    }
+
+    .eco-box {
+      background: linear-gradient(135deg, rgba(0, 232, 150, 0.07), rgba(0, 212, 255, 0.04));
+      border: 1px solid rgba(0, 232, 150, 0.28);
+      border-radius: 6px;
+      padding: 7px 8px
+    }
+
+    .eco-box .eco-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      color: var(--green);
+      letter-spacing: .1em;
+      margin-bottom: 4px
+    }
+
+    .eco-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2px
+    }
+
+    .eco-lbl {
+      font-size: 10px;
+      color: var(--dim)
+    }
+
+    .eco-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--green)
+    }
+
+    .eco-highlight {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--green)
+    }
+
+    .anim-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px
+    }
+
+    .step-bar {
+      display: flex;
+      gap: 3px
+    }
+
+    .sdot {
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      transition: background .2s
+    }
+
+    .sdot.ac {
+      background: var(--cyan)
+    }
+
+    .sdot.dn {
+      background: rgba(0, 212, 255, 0.3)
+    }
+
+    .step-lbl {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--dim)
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 5px
+    }
+
+    .ctrl-btn {
+      flex: 1;
+      padding: 4px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--dim);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .15s
+    }
+
+    .ctrl-btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan)
+    }
+
+    .play-btn {
+      border-color: var(--green);
+      color: var(--green)
+    }
+
+    .annot-box {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--cyan);
+      border-radius: 4px;
+      padding: 5px 7px;
+      font-size: 10px;
+      color: var(--dim);
+      line-height: 1.45
+    }
+
+    .annot-box strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 2px
+    }
+
+    /* CONTENT AREA */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0
+    }
+
+    /* TOP 4 PANELS */
+    .panels-top {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      flex: 1;
+      min-height: 0
+    }
+
+    /* BOTTOM PANEL - full width */
+    .panel-bottom {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      height: 214px;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden
+    }
+
+    .panel-bottom-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: .1em;
+      color: #7a9ab8;
+      padding: 4px 10px 0;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .panel-bottom-subtitle {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 10px;
+      color: #5a8090;
+      padding: 1px 10px 0;
+      font-style: italic;
+    }
+
+    .panel-bottom svg {
+      width: 100%;
+      height: calc(100% - 30px)
+    }
+
+    .panel {
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0
+    }
+
+    .panel-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: .1em;
+      color: #7a9ab8;
+      padding: 5px 8px 0;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+
+    .panel-subtitle {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 10px;
+      color: #5a8090;
+      padding: 2px 8px 0;
+      flex-shrink: 0;
+      font-style: italic;
+      letter-spacing: 0;
+    }
+
+    .panel svg {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      min-height: 0
+    }
+
+    .panel-step {
+      position: absolute;
+      top: 4px;
+      right: 7px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--cyan)
+    }
+  </style>
+</head>
+
+<body>
+  <div class="hdr">
+    <h1>TMF — <span>Rankine + Superheat</span> · Thermodynamic Manifold v3.2</h1>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="badge">IAPWS-IF97 TABLES</span>
+      <span class="badge">σ_μ DECOMPOSED</span>
+      <span class="badge">TMF 2026</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <div class="sec-lbl">Cycle Parameters</div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Boiler T_sat (°C)</span><span class="sl-val" id="v-tb">300</span>
+        </div>
+        <input type="range" id="s-tb" min="150" max="350" value="300" step="5" oninput="up()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Superheat T <span style="color:var(--orange)">1'</span>
+            (°C)</span><span class="sl-val" id="v-sh">500</span></div>
+        <input type="range" id="s-sh" min="370" max="620" value="500" step="10" oninput="up()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Condenser T (°C)</span><span class="sl-val" id="v-tc">40</span></div>
+        <input type="range" id="s-tc" min="20" max="90" value="40" step="5" oninput="up()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Turbine η_t</span><span class="sl-val" id="v-et">0.85</span></div>
+        <input type="range" id="s-et" min="0.50" max="1.00" value="0.85" step="0.01" oninput="up()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Pump η_p</span><span class="sl-val" id="v-ep">0.85</span></div>
+        <input type="range" id="s-ep" min="0.50" max="1.00" value="0.85" step="0.01" oninput="up()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr"><span class="sl-name">Plant power (MW)</span><span class="sl-val" id="v-mw">100</span></div>
+        <input type="range" id="s-mw" min="10" max="1000" value="100" step="10" oninput="up()">
+      </div>
+
+      <div class="sec-lbl">Reference Plant</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--dim)">
+          <input type="radio" name="ref" value="old" onchange="setRef(this.value)" style="accent-color:var(--orange)">
+          <span>Old (1980s) σ_μ≈0.30</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--dim)">
+          <input type="radio" name="ref" value="modern" onchange="setRef(this.value)"
+            style="accent-color:var(--yellow)">
+          <span>Modern σ_μ≈0.15</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--cyan)"
+          id="ref-custom-lbl">
+          <input type="radio" name="ref" value="custom" onchange="setRef(this.value)" checked
+            style="accent-color:var(--cyan)">
+          <span>Custom (sliders)</span>
+        </label>
+      </div>
+      <hr class="divider">
+      <div class="sec-lbl">Turbine Inlet σ_μ Components</div>
+      <div class="sl-row">
+        <div class="sl-hdr">
+          <span class="sl-name">σ_T <span style="font-size:9px;color:var(--dim)">temp.gradient</span></span>
+          <span class="sl-val" id="v-st">0.12</span>
+        </div>
+        <input type="range" id="s-st" data-sig="1" min="0.01" max="0.30" value="0.12" step="0.01" oninput="onSlider()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr">
+          <span class="sl-name">σ_ρ <span style="font-size:9px;color:var(--dim)">density spread</span></span>
+          <span class="sl-val" id="v-sr">0.08</span>
+        </div>
+        <input type="range" id="s-sr" data-sig="1" min="0.01" max="0.20" value="0.08" step="0.01" oninput="onSlider()">
+      </div>
+      <div class="sl-row">
+        <div class="sl-hdr">
+          <span class="sl-name">σ_v <span style="font-size:9px;color:var(--dim)">velocity profile</span></span>
+          <span class="sl-val" id="v-sv">0.10</span>
+        </div>
+        <input type="range" id="s-sv" data-sig="1" min="0.01" max="0.25" value="0.10" step="0.01" oninput="onSlider()">
+      </div>
+      <div class="metric-box wide" style="margin-top:2px">
+        <div class="lbl">σ_μ resultant (√(σ_T²+σ_ρ²+σ_v²))</div>
+        <div class="val purple" id="m-sigr">—</div>
+      </div>
+
+      <hr class="divider">
+      <div class="sec-lbl">Thermodynamic Metrics</div>
+      <div class="metric-grid">
+        <div class="metric-box wide">
+          <div class="lbl">η Rankine classical [PROVEN]</div>
+          <div class="val green" id="m-ecl">—</div>
+        </div>
+        <div class="metric-box wide">
+          <div class="lbl">η TMF · Δη∼Var(μ) [CONJECTURE]</div>
+          <div class="val" id="m-etmf">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl" title="Carnot with the entropic mean temperature of heat addition — the real ceiling for this cycle">η Carnot (T̄ in)</div>
+          <div class="val yellow" id="m-ecar">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl" title="Carnot with T_max = superheat temperature">η Carnot (T_max)</div>
+          <div class="val yellow" id="m-ecarmax">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl">T̄ heat addition</div>
+          <div class="val yellow" id="m-tmean">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl">Δη TMF loss</div>
+          <div class="val red" id="m-dloss">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl">W_net (kJ/kg)</div>
+          <div class="val" id="m-wnet">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl">Steam quality x₂'</div>
+          <div class="val" id="m-x2">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="lbl">κ_peak [NUMERICAL]</div>
+          <div class="val purple" id="m-kpeak">—</div>
+        </div>
+        <div class="metric-box wide">
+          <div class="lbl">P_boil / P_cond</div>
+          <div class="val" id="m-press">—</div>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="eco-box">
+        <div class="eco-title">⚡ ECONOMIC OUTPUT</div>
+        <div class="eco-row"><span class="eco-lbl">σ_μ → ideal gain</span><span class="eco-val" id="e-gain">—</span>
+        </div>
+        <div class="eco-row"><span class="eco-lbl">Annual saving</span><span class="eco-highlight" id="e-save">—</span>
+        </div>
+        <div class="eco-row"><span class="eco-lbl">10-year value</span><span class="eco-val" id="e-10yr">—</span></div>
+        <div style="font-size:9px;color:var(--dim);margin-top:3px" id="e-note">@ $80/MWh, 8000h/yr</div>
+      </div>
+
+      <hr class="divider">
+      <div class="sec-lbl">Animation</div>
+      <div class="anim-section">
+        <div class="step-bar">
+          <div class="sdot" id="dot0"></div>
+          <div class="sdot" id="dot1"></div>
+          <div class="sdot" id="dot2"></div>
+          <div class="sdot" id="dot3"></div>
+          <div class="sdot" id="dot4"></div>
+        </div>
+        <div class="step-lbl" id="step-lbl">1→1': Superheat</div>
+        <div class="btn-row">
+          <button class="ctrl-btn" onclick="prevStep()">◀</button>
+          <button class="ctrl-btn play-btn" id="btn-play" onclick="togglePlay()">▶ PLAY</button>
+          <button class="ctrl-btn" onclick="nextStep()">▶</button>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="sec-lbl">TMF Insight</div>
+      <div class="annot-box" id="annot"><strong>Loading...</strong></div>
+    </div>
+
+    <div class="content">
+      <div class="panels-top">
+        <div class="panel">
+          <div class="panel-title">T-s DIAGRAM (IAPWS-IF97)</div>
+          <div class="panel-subtitle">The cycle as a path on the thermodynamic manifold</div>
+          <div class="panel-step" id="ts-lbl">STEP 1/5</div>
+          <svg id="svg-ts" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="panel">
+          <div class="panel-title">μ(W) DISTRIBUTION</div>
+          <div class="panel-subtitle">What the steam looks like — the narrower, the better</div>
+          <svg id="svg-mu" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="panel">
+          <div class="panel-title">κ(μ) ALONG CYCLE</div>
+          <div class="panel-subtitle">Where entropy is born — not how much, but where and how fast</div>
+          <svg id="svg-kap" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="panel">
+          <div class="panel-title">η vs σ_μ</div>
+          <div class="panel-subtitle">How much efficiency you leave on the table</div>
+          <svg id="svg-eta" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+      </div>
+      <div class="panel-bottom">
+        <div class="panel-bottom-title">TURBINE INLET STATE DECOMPOSITION — μ(W) = f(σ_T, σ_ρ, σ_v)</div>
+        <div class="panel-bottom-subtitle">WHERE THE MONEY IS — each component tells you what to fix and how much you gain</div>
+        <svg id="svg-inlet" viewBox="0 0 1600 186" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; padding:10px 8px 16px; font-size:11px; color:var(--dim); letter-spacing:0.02em;">
+    Model &amp; implementation: Tatai László — laszlo.tatai@outlook.com — Thermodynamic Manifold (TMF) project · CC BY 4.0 (please keep this line if you reuse or fork)
+  </div>
+
+  <script>
+    /**
+     * TMF Rankine Cycle Simulator v3.2
+     * Author: László Tatai (2026) — Barfoot Realism Labs
+     * Licensed CC BY 4.0 — keep this notice and the on-page credit line if you fork or redistribute.
+     *
+     * Status markers per TMF_v01.md:
+     * [PROVEN]    — IAPWS-IF97 thermodynamic tables
+     * [NUMERICAL] — κ(μ) heuristic estimates (TMF §3.2)
+     * [CONJECTURE]— Δη ∼ Var(μ) efficiency relation (TMF §4.3, Uni_Relatio_TMF.md)
+     *
+     * σ_μ decomposition:
+     *   σ_μ² = σ_T² + σ_ρ² + σ_v²
+     *   σ_T: temperature gradient across pipe cross-section
+     *   σ_ρ: density inhomogeneity (pressure non-uniformity)
+     *   σ_v: velocity profile (laminar vs turbulent, Re-dependent)
+     *
+     * Economic model:
+     *   sig_ideal = 0.04 [NUMERICAL] — heuristic optimum, not derived
+     *   Δη = κ_sens × σ_μ² × κ_peak, κ_sens = 0.15 [CONJECTURE]
+     */
+
+    // ================================================
+    // IAPWS-IF97 SATURATED WATER TABLES [PROVEN]
+    // Source: Wagner & Kruse (2008), IAPWS-IF97
+    // ================================================
+    const SAT_TABLE = [
+      // [T_C, hf, hfg, sf, sg] — regenerated from IAPWS-IF97 (iapws 1.5)
+      [0, 0.0, 2500.9, 0.0000, 9.1555],
+      [10, 42.0, 2477.2, 0.1511, 8.8998],
+      [20, 83.9, 2453.5, 0.2965, 8.6661],
+      [30, 125.7, 2429.8, 0.4368, 8.4521],
+      [40, 167.5, 2406.0, 0.5724, 8.2557],
+      [50, 209.3, 2382.0, 0.7038, 8.0749],
+      [60, 251.2, 2357.7, 0.8312, 7.9082],
+      [70, 293.0, 2333.1, 0.9550, 7.7540],
+      [80, 334.9, 2308.1, 1.0754, 7.6110],
+      [90, 377.0, 2282.6, 1.1927, 7.4781],
+      [100, 419.1, 2256.5, 1.3070, 7.3541],
+      [120, 503.8, 2202.1, 1.5278, 7.1291],
+      [140, 589.2, 2144.2, 1.7393, 6.9293],
+      [160, 675.6, 2081.9, 1.9428, 6.7491],
+      [180, 763.2, 2014.0, 2.1395, 6.5841],
+      [200, 852.4, 1939.7, 2.3308, 6.4303],
+      [220, 943.6, 1857.4, 2.5178, 6.2842],
+      [240, 1037.5, 1765.5, 2.7019, 6.1425],
+      [260, 1134.8, 1661.8, 2.8847, 6.0017],
+      [280, 1236.7, 1543.2, 3.0681, 5.8578],
+      [300, 1344.8, 1404.8, 3.2547, 5.7058],
+      [320, 1462.1, 1238.6, 3.4491, 5.5373],
+      [340, 1594.4, 1027.6, 3.6599, 5.3359],
+      [360, 1761.5, 719.5, 3.9164, 5.0527],
+      [365, 1817.6, 604.4, 4.0010, 4.9482],
+      [370, 1892.6, 440.9, 4.1142, 4.7996],
+      [372, 1938.6, 336.1, 4.1836, 4.7047],
+      [373, 1974.3, 252.8, 4.2380, 4.6293],
+      [373.5, 2011.7, 181.6, 4.2954, 4.5762],
+      [373.9, 2064.2, 47.8, 4.3759, 4.4499],
+    ];
+
+    function satProps(T_C) {
+      T_C = Math.max(0, Math.min(373.9, T_C));
+      let i = 0;
+      while (i < SAT_TABLE.length - 2 && SAT_TABLE[i + 1][0] <= T_C) i++;
+      const t0 = SAT_TABLE[i], t1 = SAT_TABLE[i + 1];
+      const f = (T_C - t0[0]) / (t1[0] - t0[0]);
+      const hf = t0[1] + (t1[1] - t0[1]) * f;
+      const hfg = t0[2] + (t1[2] - t0[2]) * f;
+      const sf = t0[3] + (t1[3] - t0[3]) * f;
+      const sg = t0[4] + (t1[4] - t0[4]) * f;
+      const T_K = T_C + 273.15;
+      const tau = 1 - T_K / 647.096;
+      const lnPr = (647.096 / T_K) * (
+        -7.85951783 * tau + 1.84408259 * Math.pow(tau, 1.5)
+        - 11.7866497 * Math.pow(tau, 3) + 22.6807411 * Math.pow(tau, 3.5)
+        - 15.9618719 * Math.pow(tau, 4) + 1.80122502 * Math.pow(tau, 7.5));
+      const P_kPa = Math.exp(lnPr) * 22064;
+      const vf = 0.001002 + 4.0e-7 * T_C + 3.5e-9 * T_C * T_C;
+      return { P_kPa, hf, hg: hf + hfg, hfg, sf, sg, sfg: sg - sf, vf, T_C, T_K };
+    }
+
+    // ================================================
+    // IAPWS-IF97 SUPERHEATED STEAM TABLES [PROVEN]
+    // ================================================
+    const SH_TABLE = {
+      // P_bar: { T_C: [h kJ/kg, s kJ/kgK] } — regenerated from IAPWS-IF97
+      // first key of each block = true T_sat(P), value = saturated vapour
+      1: {
+        99.6: [2674.9, 7.3588], 150: [2776.6, 7.6147], 200: [2875.5, 7.8356], 250: [2974.5, 8.0346],
+        300: [3074.5, 8.2171], 325: [3125.0, 8.3033], 350: [3175.8, 8.3865], 375: [3227.0, 8.4670],
+        400: [3278.5, 8.5451], 425: [3330.5, 8.6208], 450: [3382.8, 8.6945], 475: [3435.6, 8.7662],
+        500: [3488.7, 8.8361], 525: [3542.3, 8.9043], 550: [3596.3, 8.9709], 575: [3650.7, 9.0360],
+        600: [3705.6, 9.0998], 625: [3760.9, 9.1622], 650: [3816.6, 9.2234],
+      },
+      2: {
+        120.2: [2706.2, 7.1269], 150: [2769.1, 7.2809], 200: [2870.8, 7.5081], 250: [2971.3, 7.7100],
+        300: [3072.1, 7.8940], 325: [3122.8, 7.9807], 350: [3173.9, 8.0643], 375: [3225.3, 8.1452],
+        400: [3277.0, 8.2235], 425: [3329.1, 8.2994], 450: [3381.5, 8.3733], 475: [3434.4, 8.4451],
+        500: [3487.6, 8.5151], 525: [3541.3, 8.5834], 550: [3595.4, 8.6501], 575: [3649.9, 8.7154],
+        600: [3704.8, 8.7792], 625: [3760.1, 8.8417], 650: [3815.9, 8.9029],
+      },
+      3: {
+        133.5: [2724.9, 6.9916], 150: [2761.2, 7.0791], 200: [2866.0, 7.3132], 250: [2967.9, 7.5181],
+        300: [3069.6, 7.7037], 325: [3120.7, 7.7909], 350: [3172.0, 7.8749], 375: [3223.5, 7.9561],
+        400: [3275.4, 8.0346], 425: [3327.7, 8.1108], 450: [3380.2, 8.1848], 475: [3433.2, 8.2568],
+        500: [3486.6, 8.3269], 525: [3540.3, 8.3954], 550: [3594.5, 8.4622], 575: [3649.0, 8.5275],
+        600: [3704.0, 8.5914], 625: [3759.4, 8.6539], 650: [3815.3, 8.7152],
+      },
+      5: {
+        151.8: [2748.1, 6.8206], 200: [2855.9, 7.0611], 250: [2961.1, 7.2726], 300: [3064.6, 7.4614],
+        325: [3116.3, 7.5497], 350: [3168.1, 7.6345], 375: [3220.1, 7.7163], 400: [3272.3, 7.7954],
+        425: [3324.8, 7.8720], 450: [3377.7, 7.9464], 475: [3430.9, 8.0187], 500: [3484.4, 8.0891],
+        525: [3538.3, 8.1577], 550: [3592.6, 8.2247], 575: [3647.3, 8.2902], 600: [3702.5, 8.3543],
+        625: [3758.0, 8.4169], 650: [3813.9, 8.4784],
+      },
+      7: {
+        165: [2762.7, 6.7070], 200: [2845.3, 6.8884], 250: [2954.1, 7.1071], 300: [3059.5, 7.2995],
+        325: [3111.8, 7.3889], 350: [3164.1, 7.4745], 375: [3216.5, 7.5570], 400: [3269.1, 7.6366],
+        425: [3322.0, 7.7137], 450: [3375.1, 7.7884], 475: [3428.5, 7.8611], 500: [3482.3, 7.9317],
+        525: [3536.4, 8.0006], 550: [3590.8, 8.0678], 575: [3645.7, 8.1334], 600: [3700.9, 8.1976],
+        625: [3756.5, 8.2604], 650: [3812.6, 8.3220],
+      },
+      10: {
+        179.9: [2777.1, 6.5850], 200: [2828.3, 6.6955], 250: [2943.2, 6.9266], 300: [3051.7, 7.1247],
+        325: [3105.0, 7.2158], 350: [3158.2, 7.3028], 375: [3211.2, 7.3863], 400: [3264.4, 7.4668],
+        425: [3317.7, 7.5445], 450: [3371.2, 7.6198], 475: [3425.0, 7.6929], 500: [3479.0, 7.7640],
+        525: [3533.4, 7.8332], 550: [3588.1, 7.9007], 575: [3643.1, 7.9665], 600: [3698.6, 8.0309],
+        625: [3754.4, 8.0940], 650: [3810.5, 8.1557],
+      },
+      15: {
+        198.3: [2791.0, 6.4431], 200: [2796.0, 6.4537], 250: [2924.0, 6.7111], 300: [3038.3, 6.9199],
+        325: [3093.5, 7.0142], 350: [3148.0, 7.1035], 375: [3202.3, 7.1889], 400: [3256.4, 7.2708],
+        425: [3310.5, 7.3497], 450: [3364.7, 7.4259], 475: [3419.0, 7.4998], 500: [3473.6, 7.5716],
+        525: [3528.4, 7.6413], 550: [3583.5, 7.7093], 575: [3638.9, 7.7756], 600: [3694.6, 7.8404],
+        625: [3750.7, 7.9037], 650: [3807.2, 7.9657],
+      },
+      20: {
+        212.4: [2798.4, 6.3392], 250: [2903.2, 6.5474], 300: [3024.3, 6.7685], 325: [3081.5, 6.8663],
+        350: [3137.6, 6.9582], 375: [3193.1, 7.0455], 400: [3248.2, 7.1290], 425: [3303.2, 7.2091],
+        450: [3358.1, 7.2863], 475: [3413.0, 7.3610], 500: [3468.1, 7.4335], 525: [3523.4, 7.5038],
+        550: [3578.9, 7.5723], 575: [3634.6, 7.6391], 600: [3690.7, 7.7042], 625: [3747.1, 7.7679],
+        650: [3803.8, 7.8301],
+      },
+      25: {
+        224: [2802.0, 6.2560], 250: [2880.9, 6.4106], 300: [3009.6, 6.6460], 325: [3069.1, 6.7476],
+        350: [3127.0, 6.8424], 375: [3183.8, 6.9317], 400: [3240.0, 7.0168], 425: [3295.8, 7.0982],
+        450: [3351.4, 7.1765], 475: [3407.0, 7.2520], 500: [3462.6, 7.3251], 525: [3518.3, 7.3961],
+        550: [3574.2, 7.4651], 575: [3630.4, 7.5323], 600: [3686.8, 7.5978], 625: [3743.4, 7.6618],
+        650: [3800.4, 7.7243],
+      },
+      30: {
+        233.9: [2803.3, 6.1858], 250: [2856.5, 6.2893], 300: [2994.3, 6.5412], 325: [3056.4, 6.6471],
+        350: [3116.1, 6.7449], 375: [3174.3, 6.8365], 400: [3231.6, 6.9233], 425: [3288.3, 7.0060],
+        450: [3344.7, 7.0853], 475: [3400.9, 7.1617], 500: [3457.0, 7.2356], 525: [3513.3, 7.3072],
+        550: [3569.6, 7.3767], 575: [3626.1, 7.4443], 600: [3682.8, 7.5102], 625: [3739.8, 7.5745],
+        650: [3797.0, 7.6373],
+      },
+      40: {
+        250.4: [2800.9, 6.0697], 300: [2961.7, 6.3638], 325: [3029.5, 6.4797], 350: [3093.3, 6.5843],
+        375: [3154.7, 6.6808], 400: [3214.4, 6.7712], 425: [3273.0, 6.8567], 450: [3331.0, 6.9383],
+        475: [3388.5, 7.0166], 500: [3445.8, 7.0919], 525: [3503.0, 7.1647], 550: [3560.2, 7.2353],
+        575: [3617.5, 7.3038], 600: [3674.8, 7.3704], 625: [3732.4, 7.4354], 650: [3790.2, 7.4989],
+      },
+      50: {
+        263.9: [2794.2, 5.9737], 300: [2925.6, 6.2109], 325: [3000.6, 6.3389], 350: [3069.3, 6.4515],
+        375: [3134.2, 6.5536], 400: [3196.6, 6.6481], 425: [3257.4, 6.7368], 450: [3317.0, 6.8208],
+        475: [3376.0, 6.9009], 500: [3434.5, 6.9778], 525: [3492.7, 7.0519], 550: [3550.8, 7.1235],
+        575: [3608.8, 7.1930], 600: [3666.8, 7.2604], 625: [3725.0, 7.3261], 650: [3783.3, 7.3901],
+      },
+      60: {
+        275.6: [2784.6, 5.8901], 300: [2885.5, 6.0702], 325: [2969.4, 6.2136], 350: [3043.9, 6.3356],
+        375: [3112.8, 6.4440], 400: [3178.2, 6.5431], 425: [3241.3, 6.6351], 450: [3302.8, 6.7216],
+        475: [3363.2, 6.8038], 500: [3422.9, 6.8824], 525: [3482.2, 6.9578], 550: [3541.2, 7.0306],
+        575: [3600.0, 7.1009], 600: [3658.8, 7.1692], 625: [3717.5, 7.2356], 650: [3776.4, 7.3002],
+      },
+      70: {
+        285.8: [2772.6, 5.8146], 300: [2839.8, 5.9335], 325: [2935.5, 6.0970], 350: [3016.8, 6.2303],
+        375: [3090.4, 6.3460], 400: [3159.1, 6.4501], 425: [3224.7, 6.5458], 450: [3288.2, 6.6351],
+        475: [3350.2, 6.7195], 500: [3411.3, 6.7997], 525: [3471.6, 6.8766], 550: [3531.5, 6.9505],
+        575: [3591.2, 7.0218], 600: [3650.6, 7.0909], 625: [3710.0, 7.1580], 650: [3769.4, 7.2232],
+      },
+      80: {
+        295: [2758.6, 5.7448], 300: [2786.4, 5.7935], 325: [2898.3, 5.9849], 350: [2988.1, 6.1319],
+        375: [3066.9, 6.2560], 400: [3139.3, 6.3657], 425: [3207.6, 6.4654], 450: [3273.2, 6.5577],
+        475: [3337.0, 6.6443], 500: [3399.4, 6.7264], 525: [3460.9, 6.8047], 550: [3521.8, 6.8798],
+        575: [3582.2, 6.9522], 600: [3642.4, 7.0221], 625: [3702.5, 7.0899], 650: [3762.4, 7.1557],
+      },
+      90: {
+        303.3: [2742.9, 5.6790], 325: [2857.0, 5.8736], 350: [2957.2, 6.0378], 375: [3042.2, 6.1716],
+        400: [3118.8, 6.2875], 425: [3190.1, 6.3915], 450: [3257.9, 6.4871], 475: [3323.4, 6.5761],
+        500: [3387.3, 6.6601], 525: [3450.0, 6.7399], 550: [3511.9, 6.8163], 575: [3573.2, 6.8897],
+        600: [3634.2, 6.9605], 625: [3694.8, 7.0290], 650: [3755.4, 7.0955],
+      },
+      100: {
+        311: [2725.5, 5.6159], 325: [2810.2, 5.7593], 350: [2924.0, 5.9458], 375: [3016.2, 6.0910],
+        400: [3097.4, 6.2139], 425: [3172.0, 6.3228], 450: [3242.3, 6.4217], 475: [3309.7, 6.5134],
+        500: [3375.1, 6.5993], 525: [3439.0, 6.6807], 550: [3501.9, 6.7584], 575: [3564.1, 6.8328],
+        600: [3625.8, 6.9045], 625: [3687.2, 6.9738], 650: [3748.3, 7.0409],
+      },
+      110: {
+        318.1: [2706.4, 5.5545], 325: [2755.6, 5.6373], 350: [2887.8, 5.8541], 375: [2988.7, 6.0129],
+        400: [3075.1, 6.1438], 425: [3153.3, 6.2579], 450: [3226.2, 6.3605], 475: [3295.6, 6.4549],
+        500: [3362.6, 6.5430], 525: [3427.9, 6.6260], 550: [3491.9, 6.7050], 575: [3555.0, 6.7805],
+        600: [3617.5, 6.8531], 625: [3679.5, 6.9232], 650: [3741.2, 6.9910],
+      },
+      120: {
+        324.7: [2685.6, 5.4941], 350: [2848.0, 5.7607], 375: [2959.5, 5.9362], 400: [3051.9, 6.0762],
+        425: [3134.0, 6.1960], 450: [3209.8, 6.3027], 475: [3281.3, 6.3999], 500: [3350.0, 6.4902],
+        525: [3416.6, 6.5750], 550: [3481.7, 6.6553], 575: [3545.7, 6.7320], 600: [3609.0, 6.8055],
+        625: [3671.7, 6.8763], 650: [3734.1, 6.9448],
+      },
+      140: {
+        336.7: [2638.1, 5.3730], 350: [2752.9, 5.5595], 375: [2894.9, 5.7832], 400: [3002.2, 5.9457],
+        425: [3093.5, 6.0789], 450: [3175.6, 6.1945], 475: [3251.8, 6.2981], 500: [3324.1, 6.3931],
+        525: [3393.5, 6.4815], 550: [3461.0, 6.5648], 575: [3527.0, 6.6438], 600: [3591.9, 6.7192],
+        625: [3656.1, 6.7917], 650: [3719.7, 6.8615],
+      },
+      160: {
+        347.4: [2580.8, 5.2463], 350: [2617.0, 5.3045], 375: [2819.5, 5.6238], 400: [2947.5, 5.8177],
+        425: [3050.1, 5.9675], 450: [3139.6, 6.0935], 475: [3221.1, 6.2043], 500: [3297.3, 6.3045],
+        525: [3369.9, 6.3969], 550: [3439.8, 6.4832], 575: [3507.9, 6.5647], 600: [3574.6, 6.6422],
+        625: [3640.3, 6.7163], 650: [3705.1, 6.7876],
+      },
+      180: {
+        357: [2509.5, 5.1055], 375: [2726.9, 5.4465], 400: [2886.3, 5.6881], 425: [3003.4, 5.8590],
+        450: [3101.7, 5.9973], 475: [3189.1, 6.1162], 500: [3269.7, 6.2222], 525: [3345.6, 6.3189],
+        550: [3418.3, 6.4085], 575: [3488.5, 6.4926], 600: [3557.0, 6.5722], 625: [3624.2, 6.6481],
+        650: [3690.4, 6.7208],
+      },
+      200: {
+        365.7: [2411.4, 4.9299], 375: [2602.4, 5.2272], 400: [2816.8, 5.5525], 425: [2952.9, 5.7510],
+        450: [3061.5, 5.9041], 475: [3155.8, 6.0322], 500: [3241.2, 6.1445], 525: [3320.7, 6.2458],
+        550: [3396.2, 6.3390], 575: [3468.8, 6.4258], 600: [3539.2, 6.5077], 625: [3608.0, 6.5854],
+        650: [3675.6, 6.6596],
+      },
+    };
+
+    // [FIX v3.2] True saturation temperature for a given pressure (inverse Wagner).
+    // The v3.1 test compared T_C against satProps(T_C).T_C, which is the clamped
+    // INPUT — so it was identically true below 373.9 C and the SH table was never used.
+    // Memoised: isobarSH calls this ~40x per invocation and drawTS calls isobarSH
+    // twice per frame, so without the cache this ran ~5000 bisections per frame.
+    const _tSatCache = new Map();
+    function tSatFromP(P_bar) {
+      const key = Math.round(P_bar * 1000);
+      const hit = _tSatCache.get(key);
+      if (hit !== undefined) return hit;
+      let lo = 0.01, hi = 373.9;
+      for (let k = 0; k < 44; k++) {
+        const mid = (lo + hi) / 2;
+        if (satProps(mid).P_kPa / 100 < P_bar) lo = mid; else hi = mid;
+      }
+      const v = (lo + hi) / 2;
+      if (_tSatCache.size > 4096) _tSatCache.clear();
+      _tSatCache.set(key, v);
+      return v;
+    }
+
+    function superheatProps(T_C, P_bar) {
+      const Tsat = tSatFromP(P_bar);
+      if (T_C <= Tsat + 0.5) {
+        const s = satProps(Tsat);
+        return { h: s.hg, s: s.sg };
+      }
+      const pressures = Object.keys(SH_TABLE).map(Number).sort((a, b) => a - b);
+      P_bar = Math.max(pressures[0], Math.min(pressures[pressures.length - 1], P_bar));
+      let pi = 0;
+      while (pi < pressures.length - 2 && pressures[pi + 1] <= P_bar) pi++;
+      const P0 = pressures[pi], P1 = pressures[pi + 1];
+      const pFrac = (P_bar - P0) / (P1 - P0);
+      function interpAtP(Ptbl, T_C) {
+        const temps = Object.keys(Ptbl).map(Number).sort((a, b) => a - b);
+        if (T_C <= temps[0]) return Ptbl[temps[0]];
+        if (T_C >= temps[temps.length - 1]) return Ptbl[temps[temps.length - 1]];
+        let ti = 0;
+        while (ti < temps.length - 2 && temps[ti + 1] <= T_C) ti++;
+        const T0 = temps[ti], T1 = temps[ti + 1];
+        const tf = (T_C - T0) / (T1 - T0);
+        const v0 = Ptbl[T0], v1 = Ptbl[T1];
+        return [v0[0] + (v1[0] - v0[0]) * tf, v0[1] + (v1[1] - v0[1]) * tf];
+      }
+      const v0 = interpAtP(SH_TABLE[P0], T_C);
+      const v1 = interpAtP(SH_TABLE[P1], T_C);
+      return { h: v0[0] + (v1[0] - v0[0]) * pFrac, s: v0[1] + (v1[1] - v0[1]) * pFrac };
+    }
+
+    function isobarSH(P_bar, T_start, T_end, N = 30) {
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const T = T_start + (T_end - T_start) * i / N;
+        const pr = superheatProps(T, P_bar);
+        pts.push({ T, s: pr.s, h: pr.h });
+      }
+      return pts;
+    }
+
+    // ================================================
+    // STATE
+    // ================================================
+    let playing = false, step = 0, tick = 0, raf = 0;
+    const TICKS = 120, SKIP = 1;
+    const STEP_MS = 2200;   // wall-clock ms per cycle step (delta-time animation)
+    let P = {
+      Tb: 300, Tsh: 500, Tc: 40, et: 0.85, ep: 0.85, mw: 100,
+      sT: 0.12, sR: 0.08, sV: 0.10
+    };
+
+    // ================================================
+    // RANKINE CYCLE [PROVEN thermodynamics]
+    // ================================================
+    const SIG_IDEAL = 0.04;   // [NUMERICAL] heuristic optimum
+    const KAPPA_SENS = 0.15;  // [CONJECTURE] sensitivity constant
+    const KAPPA_DRIVER = 'turbine'; // 'turbine' | 'peak'  — see note in rankine()
+    const HOURS_PER_YEAR = 8000;
+    const POWER_PRICE = 80;   // $/MWh_e
+
+    function rankine() {
+      const boil = satProps(P.Tb);
+      const cond = satProps(P.Tc);
+      const P_bar = boil.P_kPa / 100;
+
+      // Point 1: saturated steam
+      const h1 = boil.hg, s1 = boil.sg, T1 = boil.T_C;
+
+      // Point 1': superheated steam
+      const sh = superheatProps(P.Tsh, P_bar);
+      const h1p = sh.h, s1p = sh.s, T1p = P.Tsh;
+
+      // Point 2': turbine exit
+      // [FIX v3.2] v3.1 clamped the steam quality to 1. When s1' > s_g(T_cond) the
+      // isentropic end state is SUPERHEATED vapour whose enthalpy is ABOVE h_g, so
+      // clamping to h_g understated h2s, overstated the turbine work, and let
+      // eta_cl beat the Carnot bound in 432 of 15975 slider settings.
+      // Low-pressure steam is nearly ideal-gas, so extend above the dome with a
+      // constant cp instead of clamping.
+      const CP_VAP = 1.95;            // kJ/kgK — low-pressure superheated steam
+      const Tc_K = cond.T_K;
+      let x2s, h2p_s;
+      if (s1p > cond.sg) {
+        const T2s_K = Tc_K * Math.exp((s1p - cond.sg) / CP_VAP);
+        h2p_s = cond.hg + CP_VAP * (T2s_K - Tc_K);
+        x2s = 1;
+      } else {
+        x2s = Math.max(0, (s1p - cond.sf) / cond.sfg);
+        h2p_s = cond.hf + x2s * cond.hfg;
+      }
+      const w_turb_s = h1p - h2p_s;
+      const w_turb = w_turb_s * P.et;
+      const h2p = h1p - w_turb;
+
+      let x2p, s2p, T2p, dryExhaust = false;
+      if (h2p > cond.hg) {            // real exhaust is dry/superheated as well
+        dryExhaust = true;
+        const T2p_K = Tc_K + (h2p - cond.hg) / CP_VAP;
+        T2p = T2p_K - 273.15;
+        s2p = cond.sg + CP_VAP * Math.log(T2p_K / Tc_K);
+        x2p = 1;
+      } else {
+        x2p = Math.max(0, Math.min(1, (h2p - cond.hf) / cond.hfg));
+        s2p = cond.sf + x2p * cond.sfg;
+        T2p = cond.T_C;
+      }
+
+      // Point 3: saturated liquid
+      const h3 = cond.hf, s3 = cond.sf, T3 = cond.T_C;
+
+      // Point 4: pump exit [FIX v3.2 — entropy-consistent]
+      // Only the IRREVERSIBLE part of the pump work heats the liquid and
+      // generates entropy; the reversible v*dP part is stored as pressure energy.
+      const w_pump_s = cond.vf * (boil.P_kPa - cond.P_kPa);
+      const w_pump = Math.max(0.1, w_pump_s / P.ep);
+      const w_pump_loss = Math.max(0, w_pump - w_pump_s);
+      const h4 = h3 + w_pump;
+      const T4 = T3 + w_pump_loss / 4.18;              // ~0.4 C at defaults
+      const s4 = s3 + w_pump_loss / (T3 + 273.15);     // s_gen, no longer assumed isentropic
+
+      const q_in = h1p - h4;
+      const w_net = w_turb - w_pump;
+      const eta_cl = Math.max(0, w_net / q_in);
+
+      // [FIX v3.2] Carnot references.
+      // v3.1 used T_sat(boiler), which is NOT an upper bound once you superheat:
+      // eta_cl exceeded it on 7.5% of the parameter space (worst case +12.5pp).
+      // T_mean is the entropic mean temperature of heat addition — the real
+      // ceiling for THIS cycle, and it exposes the non-isothermal heat-input loss.
+      const T_mean = (s1p - s4) > 1e-9 ? (h1p - h4) / (s1p - s4) : boil.T_K;
+      const eta_carnot_mean = 1 - cond.T_K / T_mean;
+      const eta_carnot_max = 1 - cond.T_K / (P.Tsh + 273.15);
+      const eta_carnot = eta_carnot_mean;
+
+      // σ_μ resultant [CONJECTURE: σ_μ² = σ_T² + σ_ρ² + σ_v²]
+      const sig_mu = Math.sqrt(P.sT * P.sT + P.sR * P.sR + P.sV * P.sV);
+
+      // κ(μ) per step [NUMERICAL]
+      const kap_sh = 1.0 + 0.3 * (P.Tsh - P.Tb) / 200;
+      const kap_turb = 1.0 + 0.5 * (1 - P.et) + 0.4 * (1 - x2p) + 0.6 * sig_mu * sig_mu;
+      const kap_cond = 1.0 + 0.15 * (1 - x2p);
+      const kap_pump = 1.0 + 0.05 * (1 - P.ep);
+      const kap_boil = 1.0 + (boil.hfg / 2257) * (1.0 + sig_mu);
+
+      const kaps = [kap_sh, kap_turb, kap_cond, kap_pump, kap_boil];
+      const km = kaps.reduce((a, b) => a + b) / 5;
+      const kap_peak = Math.max(...kaps);
+
+      // [FIX v3.2] Which κ scales Δη?
+      // v3.1 used kap_peak, which is essentially always kap_boil (1.731 vs 1.142
+      // at defaults) — i.e. Δη was driven by the LATENT HEAT of the boiler, while
+      // the whole σ_μ narrative is about the TURBINE INLET. Switched to kap_turb.
+      // Set KAPPA_DRIVER = 'peak' to restore the v3.1 behaviour.
+      const kap_drive = (KAPPA_DRIVER === 'peak') ? kap_peak : kap_turb;
+
+      // η_TMF [CONJECTURE: Δη ∼ Var(μ)]
+      const delta_eta = sig_mu * sig_mu * kap_drive * KAPPA_SENS;
+      const etmf = eta_cl * Math.max(0.55, 1 - delta_eta);
+
+      // Ideal TMF efficiency (σ=SIG_IDEAL)
+      const delta_eta_ideal = SIG_IDEAL * SIG_IDEAL * kap_drive * KAPPA_SENS;
+      const etmf_ideal = eta_cl * Math.max(0.55, 1 - delta_eta_ideal);
+
+      // Recovery potential = how much we could gain by reaching ideal σ
+      const recovery_pp = Math.max(0, etmf_ideal - etmf) * 100;
+
+      return {
+        st: [
+          { h: h1, s: s1, T: T1, label: '1', desc: 'sat.steam' },
+          { h: h1p, s: s1p, T: T1p, label: "1'", desc: 'superheated' },
+          { h: h2p, s: s2p, T: T2p, label: "2'", desc: dryExhaust ? 'dry/superheated' : `wet x=${x2p.toFixed(2)}` },
+          { h: h3, s: s3, T: T3, label: '3', desc: 'sat.liquid' },
+          { h: h4, s: s4, T: T4, label: '4', desc: 'comp.liquid' },
+        ],
+        q_in, w_net, w_turb, w_pump,
+        eta_cl, eta_carnot, eta_carnot_mean, eta_carnot_max, T_mean,
+        etmf, etmf_ideal,
+        x2p, x2s, dryExhaust, T2p, kaps, km, kap_peak, kap_drive,
+        boil, cond, P_bar, sig_mu, recovery_pp,
+        h1p, s1p, T1p, h4, s4
+      };
+    }
+
+    // Reference plant presets
+    let customState = { sT: 0.12, sR: 0.08, sV: 0.10 };
+    let refMode = 'custom';
+
+    function applySigma(sT, sR, sV) {
+      P.sT = sT; P.sR = sR; P.sV = sV;
+      document.getElementById('s-st').value = sT;
+      document.getElementById('s-sr').value = sR;
+      document.getElementById('s-sv').value = sV;
+    }
+
+    // [FIX v3.2] 'custom' now restores the user's own sliders instead of silently
+    // keeping the preset values. Preset sigma values chosen so the resultant
+    // matches the label: sqrt(.21^2+.13^2+.17^2)=0.299, sqrt(.10^2+.07^2+.09^2)=0.152
+    function setRef(mode) {
+      if (refMode === 'custom' && mode !== 'custom') {
+        customState = { sT: P.sT, sR: P.sR, sV: P.sV };
+      }
+      refMode = mode;
+      if (mode === 'old') applySigma(0.21, 0.13, 0.17);
+      else if (mode === 'modern') applySigma(0.10, 0.07, 0.09);
+      else applySigma(customState.sT, customState.sR, customState.sV);
+      up();
+    }
+
+    function onSlider() {
+      if (refMode !== 'custom') {
+        refMode = 'custom';
+        const r = document.querySelector('input[name=ref][value=custom]');
+        if (r) r.checked = true;
+      }
+      up();
+    }
+
+    function up() {
+      P.Tb = +document.getElementById('s-tb').value;
+      P.Tsh = +document.getElementById('s-sh').value;
+      P.Tc = +document.getElementById('s-tc').value;
+      P.et = +document.getElementById('s-et').value;
+      P.ep = +document.getElementById('s-ep').value;
+      P.mw = +document.getElementById('s-mw').value;
+      P.sT = +document.getElementById('s-st').value;
+      P.sR = +document.getElementById('s-sr').value;
+      P.sV = +document.getElementById('s-sv').value;
+      // [FIX v3.2] snap to the slider's own step grid (min 370, step 10), otherwise
+      // the browser rounds the value and the JS variable silently desynchronises.
+      if (P.Tc >= P.Tb - 20) {
+        P.Tc = Math.floor((P.Tb - 20) / 5) * 5;
+        document.getElementById('s-tc').value = P.Tc;
+      }
+      if (P.Tsh <= P.Tb + 20) {
+        P.Tsh = 370 + Math.ceil((P.Tb + 30 - 370) / 10) * 10;
+        P.Tsh = Math.min(620, Math.max(370, P.Tsh));
+        document.getElementById('s-sh').value = P.Tsh;
+        P.Tsh = +document.getElementById('s-sh').value;   // trust the DOM
+      }
+
+      document.getElementById('v-tb').textContent = P.Tb;
+      document.getElementById('v-sh').textContent = P.Tsh;
+      document.getElementById('v-tc').textContent = P.Tc;
+      document.getElementById('v-et').textContent = P.et.toFixed(2);
+      document.getElementById('v-ep').textContent = P.ep.toFixed(2);
+      document.getElementById('v-mw').textContent = P.mw;
+      document.getElementById('v-st').textContent = P.sT.toFixed(2);
+      document.getElementById('v-sr').textContent = P.sR.toFixed(2);
+      document.getElementById('v-sv').textContent = P.sV.toFixed(2);
+
+      const cy = rankine();
+      const dloss = cy.eta_cl - cy.etmf;
+
+      document.getElementById('m-sigr').textContent = cy.sig_mu.toFixed(4);
+      document.getElementById('m-ecl').textContent = (cy.eta_cl * 100).toFixed(2) + '%';
+      document.getElementById('m-etmf').textContent = (cy.etmf * 100).toFixed(2) + '%';
+      document.getElementById('m-ecar').textContent = (cy.eta_carnot_mean * 100).toFixed(2) + '%';
+      document.getElementById('m-ecarmax').textContent = (cy.eta_carnot_max * 100).toFixed(2) + '%';
+      document.getElementById('m-tmean').textContent = (cy.T_mean - 273.15).toFixed(0) + ' °C';
+      document.getElementById('m-dloss').textContent = '−' + (dloss * 100).toFixed(2) + '%';
+      document.getElementById('m-wnet').textContent = cy.w_net.toFixed(1);
+      if (cy.dryExhaust) {
+        document.getElementById('m-x2').textContent = `dry ${cy.T2p.toFixed(0)}°C ✓`;
+        document.getElementById('m-x2').style.color = 'var(--cyan)';
+      } else {
+        document.getElementById('m-x2').textContent = cy.x2p.toFixed(3) + (cy.x2p < 0.88 ? ' ⚠' : ' ✓');
+        document.getElementById('m-x2').style.color = cy.x2p < 0.88 ? 'var(--orange)' : 'var(--green)';
+      }
+      document.getElementById('m-kpeak').textContent = cy.kap_peak.toFixed(3);
+      document.getElementById('m-press').textContent = `${cy.boil.P_kPa.toFixed(0)}/${cy.cond.P_kPa.toFixed(1)} kPa`;
+
+      // [FIX v3.2] Economics.
+      // v3.1 computed  P.mw / eta  (= MW THERMAL)  and priced it at $80/MWh_e,
+      // giving a 187 M$/yr "fuel bill" for a plant whose whole revenue is 64 M$/yr.
+      // Correct framing: same fuel in, how much MORE ELECTRICITY comes out.
+      const Q_th = P.mw / cy.etmf;                              // MW_th, held fixed
+      const extra_MW = Q_th * (cy.etmf_ideal - cy.etmf);        // MW_e gained
+      const save_yr = Math.max(0, extra_MW * HOURS_PER_YEAR * POWER_PRICE / 1e6);
+      const gain_pp = cy.recovery_pp;
+      const sig_label = `σ_μ=${cy.sig_mu.toFixed(3)} → ideal ${SIG_IDEAL.toFixed(2)}`;
+
+      if (cy.sig_mu <= SIG_IDEAL + 0.005) {
+        document.getElementById('e-gain').textContent = `Near optimum — well engineered!`;
+        document.getElementById('e-gain').style.color = 'var(--green)';
+        document.getElementById('e-save').textContent = '< $0.1M/yr';
+        document.getElementById('e-10yr').textContent = 'minimal';
+      } else {
+        document.getElementById('e-gain').textContent = `+${gain_pp.toFixed(2)}pp recoverable`;
+        document.getElementById('e-gain').style.color = 'var(--cyan)';
+        document.getElementById('e-save').textContent = `$${save_yr.toFixed(2)}M/yr`;
+        document.getElementById('e-10yr').textContent = `$${(save_yr * 10).toFixed(1)}M`;
+      }
+      document.getElementById('e-note').textContent =
+        `${sig_label} · +${extra_MW.toFixed(2)}MW_e · $${POWER_PRICE}/MWh · ${HOURS_PER_YEAR}h/yr`;
+
+      render(cy);
+    }
+
+    // ================================================
+    // SVG HELPERS
+    // ================================================
+    // [FIX v3.2] The panels are tall and narrow (~425 x 800 px) but the viewBox was
+    // 400x260 with preserveAspectRatio="none" — every label was stretched ~3x
+    // vertically. Now the viewBox aspect is derived from the real element size, so
+    // nothing is distorted and the plots use the full panel.
+    const VB = { w: 400, h: 260, pl: 34, pr: 20, pt: 18, pb: 26 };
+    function syncVB(id) {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      if (r.width > 4 && r.height > 4) {
+        VB.w = 400;
+        VB.h = Math.max(180, Math.min(1400, Math.round(400 * r.height / r.width)));
+      }
+      el.setAttribute('viewBox', `0 0 ${VB.w} ${VB.h}`);
+      return el;
+    }
+    function svgEl(tag, attrs) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      return el;
+    }
+    function clearSvg(id) {
+      const el = document.getElementById(id);
+      while (el.firstChild) el.removeChild(el.firstChild);
+      return el;
+    }
+    function mkPath(pts, attrs) {
+      if (pts.length < 2) return null;
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      return svgEl('path', { d, ...attrs, fill: 'none' });
+    }
+    function grid(svg, nx = 4, ny = 4) {
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      for (let i = 0; i <= nx; i++) {
+        const x = pl + i * pw / nx;
+        svg.appendChild(svgEl('line', { x1: x, y1: pt, x2: x, y2: pt + ph, stroke: '#131d2a', 'stroke-width': '1' }));
+      }
+      for (let j = 0; j <= ny; j++) {
+        const y = pt + j * ph / ny;
+        svg.appendChild(svgEl('line', { x1: pl, y1: y, x2: pl + pw, y2: y, stroke: '#131d2a', 'stroke-width': '1' }));
+      }
+      svg.appendChild(svgEl('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#2a3a4a', 'stroke-width': '1' }));
+      svg.appendChild(svgEl('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#2a3a4a', 'stroke-width': '1' }));
+    }
+
+    // ================================================
+    // DRAW T-s DIAGRAM
+    // ================================================
+    function drawTS(cy) {
+      const svg = clearSvg(syncVB('svg-ts').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const s = cy.st;
+      const sMin = 0, sMax = cy.cond.sg * 1.05;
+      const TMin = 0, TMax = P.Tsh + 60;
+      const tx = sv => pl + (sv - sMin) / (sMax - sMin) * pw;
+      const ty = T => pt + ph - (T - TMin) / (TMax - TMin) * ph;
+
+      grid(svg);
+
+      const xlb = svgEl('text', { x: pl + pw - 2, y: pt + ph + 17, fill: '#3a5070', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      xlb.textContent = 's (kJ/kgK) →'; svg.appendChild(xlb);
+      const ylb = svgEl('text', { x: 7, y: pt + ph / 2, fill: '#3a5070', 'font-size': '7', 'font-family': 'IBM Plex Mono', transform: `rotate(-90,7,${pt + ph / 2})`, 'text-anchor': 'middle' });
+      ylb.textContent = 'T (°C) →'; svg.appendChild(ylb);
+      [1, 2, 3, 4, 5, 6, 7, 8].forEach(sv => {
+        if (sv < sMax) {
+          const x = tx(sv);
+          const t = svgEl('text', { x, y: pt + ph + 13, fill: '#2a3a4a', 'font-size': '6.5', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+          t.textContent = sv; svg.appendChild(t);
+        }
+      });
+      [100, 200, 300, 400, 500].forEach(T => {
+        if (T < TMax) {
+          const y = ty(T);
+          const t = svgEl('text', { x: pl - 3, y: y + 3, fill: '#2a3a4a', 'font-size': '6.5', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+          t.textContent = T; svg.appendChild(t);
+        }
+      });
+
+      // Saturation dome
+      const domePtsL = [], domePtsR = [];
+      for (let i = 0; i <= 100; i++) {
+        const T_d = 373.9 * i / 100;
+        const p = satProps(T_d);
+        domePtsL.push({ x: tx(p.sf), y: ty(T_d) });
+        domePtsR.push({ x: tx(p.sg), y: ty(T_d) });
+      }
+      const allDome = [...domePtsL, ...[...domePtsR].reverse()];
+      const domeD = allDome.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') + ' Z';
+      svg.appendChild(svgEl('path', { d: domeD, fill: 'rgba(0,212,255,0.05)', stroke: 'rgba(0,212,255,0.28)', 'stroke-width': '1' }));
+
+      const wl = svgEl('text', { x: tx((cy.cond.sf + cy.cond.sg) / 2), y: ty(cy.cond.T_C + (P.Tb - cy.cond.T_C) * 0.2), fill: 'rgba(0,212,255,0.2)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      wl.textContent = 'WET STEAM'; svg.appendChild(wl);
+
+      // Isobar — boiler pressure
+      const P_bar = cy.boil.P_kPa / 100;
+      // superheatProps is fixed in v3.2, so this no longer runs backwards along the
+      // saturation line and then jumps 1.6 kJ/kgK — it is the real isobar.
+      const shIso = isobarSH(P_bar, P.Tb, Math.min(P.Tsh + 15, 650), 40);
+      const isoPts = shIso.map(p => ({ x: tx(p.s), y: ty(p.T) }));
+      const isoPath = mkPath(isoPts, { stroke: 'rgba(255,107,53,0.3)', 'stroke-width': '0.8', 'stroke-dasharray': '3,2' });
+      if (isoPath) svg.appendChild(isoPath);
+      svg.appendChild(svgEl('line', { x1: pl, y1: ty(cy.cond.T_C), x2: pl + pw, y2: ty(cy.cond.T_C), stroke: 'rgba(74,158,255,0.15)', 'stroke-width': '0.8', 'stroke-dasharray': '3,3' }));
+
+      const isoLbl = svgEl('text', { x: tx(s[1].s) + 6, y: ty(P.Tsh) - 5, fill: 'rgba(255,107,53,0.5)', 'font-size': '7', 'font-family': 'IBM Plex Mono' });
+      isoLbl.textContent = `${P_bar.toFixed(0)}bar`; svg.appendChild(isoLbl);
+
+      // [FIX v3.2] segment 0 and 4 were the same orange and indistinguishable
+      const scols = ['#ff6b35', '#00d4ff', '#4a9eff', '#ffd166', '#e0457b'];
+
+      function segPts(si) {
+        const from = s[si], to = s[(si + 1) % 5];
+        let pts = [];
+
+        if (si === 0) {
+          // 1→1': isobaric superheating — the REAL isobar (v3.1 used a straight
+          // chord because isobarSH was broken; it is correct now, so use it).
+          // Endpoints are pinned to the exact state points to avoid a visible seam.
+          const raw = isobarSH(P_bar, from.T, to.T, 30);
+          const ds0 = from.s - raw[0].s, ds1 = to.s - raw[raw.length - 1].s;
+          for (let i = 0; i < raw.length; i++) {
+            const f = i / (raw.length - 1);
+            const sAdj = raw[i].s + ds0 * (1 - f) + ds1 * f;   // linear seam blend
+            pts.push({ x: tx(sAdj), y: ty(raw[i].T) });
+          }
+
+        } else if (si === 1) {
+          // 1'→2': turbine — MONOTONE entropy increase (not sinusoidal) [FIXED]
+          // Ideal (η=1): s=const → vertical. Real: s increases monotonically.
+          // Slight convexity (power 1.2) represents physics of expansion
+          for (let i = 0; i <= 40; i++) {
+            const frac = i / 40;
+            const T_i = from.T + (to.T - from.T) * frac;
+            // Monotone entropy increase — no artificial sine wave
+            const s_i = from.s + (to.s - from.s) * Math.pow(frac, 1.0 / (0.8 + 0.4 * P.et));
+            pts.push({ x: tx(Math.min(s_i, sMax - 0.05)), y: ty(Math.max(T_i, TMin + 1)) });
+          }
+
+        } else if (si === 2) {
+          // 2'→3: condenser. [FIX v3.2] If the exhaust is dry it first desuperheats
+          // down to T_cond and only then condenses isothermally.
+          if (cy.dryExhaust) {
+            for (let i = 0; i <= 14; i++) {
+              const f = i / 14;
+              pts.push({ x: tx(from.s + (cy.cond.sg - from.s) * f), y: ty(from.T + (cy.cond.T_C - from.T) * f) });
+            }
+            for (let i = 1; i <= 20; i++) {
+              const f = i / 20;
+              pts.push({ x: tx(cy.cond.sg + (to.s - cy.cond.sg) * f), y: ty(cy.cond.T_C) });
+            }
+          } else {
+            for (let i = 0; i <= 25; i++) {
+              const frac = i / 25;
+              pts.push({ x: tx(from.s + (to.s - from.s) * frac), y: ty(cy.cond.T_C) });
+            }
+          }
+
+        } else if (si === 3) {
+          // 3→4: pump — VERTICAL line (s=const, T barely changes) [FIXED]
+          // x is FIXED at from.s, only T changes minimally
+          for (let i = 0; i <= 10; i++) {
+            const frac = i / 10;
+            pts.push({
+              x: tx(from.s),                                    // s = constant
+              y: ty(from.T + (to.T - from.T) * frac)           // T rises ~1°C
+            });
+          }
+
+        } else {
+          // 4→1: boiler — CONTINUOUS single path [FIXED — no two-block discontinuity]
+          // Unified parametric path: liquid heating + phase change as one continuum
+          const sat = satProps(P.Tb);
+          const N = 50;
+          // Phase split: first portion is liquid heating, second is evaporation
+          // Proportion based on enthalpy: (hf_boil - h4) / (hg_boil - h4)
+          const h4_val = cy.st[4].h;
+          const f_liq = Math.min(0.85, Math.max(0.1, (sat.hf - h4_val) / (sat.hg - h4_val)));
+
+          for (let i = 0; i <= N; i++) {
+            const frac = i / N;
+            if (frac <= f_liq) {
+              // Liquid heating: 4 → sat liquid on dome left branch
+              const t = frac / f_liq;
+              const sVal = from.s + (sat.sf - from.s) * t;
+              const TVal = from.T + (sat.T_C - from.T) * t;
+              pts.push({ x: tx(sVal), y: ty(TVal) });
+            } else {
+              // Phase change: horizontal at T_boil, sat liquid → sat steam (point 1)
+              const t = (frac - f_liq) / (1 - f_liq);
+              const s_end = s[0].s;  // exactly at point 1
+              const sVal = sat.sf + (s_end - sat.sf) * t;
+              pts.push({ x: tx(sVal), y: ty(sat.T_C) });
+            }
+          }
+        }
+        return pts;
+      }
+
+      for (let si = 0; si < step; si++) {
+        const pts = segPts(si);
+        const p = mkPath(pts, { stroke: scols[si], 'stroke-width': '2', opacity: '0.65' });
+        if (p) svg.appendChild(p);
+      }
+      const t = tick / TICKS;
+      const fullPts = segPts(step);
+      const nAnim = Math.max(2, Math.floor(fullPts.length * t));
+      const animPts = fullPts.slice(0, nAnim);
+      const ap = mkPath(animPts, { stroke: scols[step], 'stroke-width': '2.5' });
+      if (ap) svg.appendChild(ap);
+      if (animPts.length > 0) {
+        const lp = animPts[animPts.length - 1];
+        svg.appendChild(svgEl('circle', { cx: lp.x, cy: lp.y, r: '4', fill: scols[step], opacity: '0.4' }));
+        svg.appendChild(svgEl('circle', { cx: lp.x, cy: lp.y, r: '2.5', fill: '#fff' }));
+      }
+      const offs = [[7, -4], [-13, -4], [7, 10], [-12, 10], [-12, -4]];
+      s.forEach((st, i) => {
+        const ac = i === step || i === (step + 1) % 5;
+        const cx = tx(st.s), cy2 = ty(st.T);
+        svg.appendChild(svgEl('circle', { cx, cy: cy2, r: ac ? '4' : '3', fill: ac ? '#fff' : '#2a3a4a', stroke: '#00d4ff', 'stroke-width': ac ? '1' : '0' }));
+        const lbl = svgEl('text', { x: cx + offs[i][0], y: cy2 + offs[i][1], fill: ac ? '#fff' : '#3a5070', 'font-size': ac ? '9' : '8', 'font-family': 'IBM Plex Mono', 'font-weight': ac ? 'bold' : 'normal' });
+        lbl.textContent = st.label; svg.appendChild(lbl);
+      });
+      const pbx = tx((cy.boil.sf + cy.boil.sg) / 2);
+      const pbt = svgEl('text', { x: pbx, y: ty(P.Tb) - 4, fill: 'var(--orange)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      pbt.textContent = '⚡ PHASE ΔH'; svg.appendChild(pbt);
+    }
+
+    // ================================================
+    // DRAW μ(W) DISTRIBUTION
+    // ================================================
+    function drawMu(cy) {
+      const svg = clearSvg(syncVB('svg-mu').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const s = cy.st;
+      grid(svg, 5, 4);
+      const xlb = svgEl('text', { x: pl + pw / 2, y: pt + ph + 17, fill: '#3a5070', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      xlb.textContent = 'T (°C) →'; svg.appendChild(xlb);
+
+      function gauss(T, mu, sig, skew = 0) {
+        const z = (T - mu) / sig;
+        const p = Math.exp(-0.5 * z * z) / (sig * Math.sqrt(2 * Math.PI));
+        const Phi = 0.5 * (1 + Math.tanh(skew * z / Math.sqrt(2)));
+        return 2 * p * Phi;
+      }
+
+      const sigBase = 15 + cy.sig_mu * 80;
+      const maxSpread = sigBase * 3.5;
+
+      // A keret adaptív méretezése
+      const Tmin = cy.cond.T_C - maxSpread * 0.5;
+      const Tmax = P.Tsh + maxSpread;
+
+      const txT = T => pl + (T - Tmin) / (Tmax - Tmin) * pw;
+      const N = 250;
+      const T_cur = s[step].T + (s[(step + 1) % 5].T - s[step].T) * tick / TICKS;
+      const sigMap = [sigBase * 1.6, sigBase * cy.sig_mu * 8, sigBase * 0.9, sigBase * 0.3, sigBase * 3.2];
+      const skMap = [0.6, cy.sT > 0.15 ? 1.8 : 0.5, -0.4, 0, 2.0];
+      const t_mu = tick / TICKS;
+      const sigCur = sigMap[(step + 4) % 5] + (sigMap[step] - sigMap[(step + 4) % 5]) * t_mu;
+      const skCur = skMap[step] * t_mu;
+
+      function drawDist(mu, sig, skew, color, alpha, filled) {
+        let pts = [], mx = 0;
+        for (let i = 0; i <= N; i++) {
+          const T = Tmin + (Tmax - Tmin) * i / N;
+          const y = gauss(T, mu, sig, skew);
+          pts.push({ T, y }); if (y > mx) mx = y;
+        }
+        if (mx === 0) return;
+        const sc = (ph * 0.72) / mx;
+        const svgPts = pts.map(p => ({ x: txT(p.T), y: pt + ph - p.y * sc }));
+        if (filled) {
+          const d = svgPts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+            + ` L${txT(Tmax)},${pt + ph} L${txT(Tmin)},${pt + ph} Z`;
+          svg.appendChild(svgEl('path', { d, fill: color, opacity: (alpha * 0.2).toString() }));
+        }
+        const lp = mkPath(svgPts, { stroke: color, 'stroke-width': filled ? '2' : '1', opacity: alpha.toString() });
+        if (lp) svg.appendChild(lp);
+      }
+
+      // [FIX v3.2] The frame became adaptive in v3.1 (~610 °C wide) but the ideal
+      // curve kept a fixed sigma of 5.8 °C — a 1.7%-of-width hairline nobody could
+      // see. Build it with the same sigBase/sigMap logic as the live curve.
+      const sigBaseIdeal = 15 + SIG_IDEAL * 80;
+      const sigIdealCur = Math.max(sigBaseIdeal * SIG_IDEAL * 8, maxSpread * 0.06);
+      drawDist(P.Tsh, sigIdealCur, 0, '#00e896', 0.45, false);
+      const stepCols = ['#ff6b35', '#00d4ff', '#4a9eff', '#ffd166', '#ff6b35'];
+      drawDist(T_cur, sigCur, skCur, stepCols[step], 1, true);
+
+      if (step === 0 || step === 1) {
+        const bx = txT(P.Tsh);
+        svg.appendChild(svgEl('line', { x1: bx, y1: pt, x2: bx, y2: pt + ph, stroke: 'rgba(0,232,150,0.3)', 'stroke-width': '1', 'stroke-dasharray': '3,2' }));
+      }
+      const lab = svgEl('text', { x: pl + pw - 2, y: pt + 11, fill: '#b06cff', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      lab.textContent = `σ_μ=${cy.sig_mu.toFixed(3)} [NUMERICAL]`; svg.appendChild(lab);
+      const lab2 = svgEl('text', { x: pl + 3, y: pt + 11, fill: '#00e896', 'font-size': '7', 'font-family': 'IBM Plex Mono' });
+      lab2.textContent = `— ideal σ=${SIG_IDEAL.toFixed(2)}`; svg.appendChild(lab2);
+      const quality = cy.sig_mu < 0.07 ? 'EXCELLENT' : cy.sig_mu < 0.13 ? 'GOOD' : cy.sig_mu < 0.22 ? 'TYPICAL' : 'POOR';
+      const qcol = cy.sig_mu < 0.07 ? '#00e896' : cy.sig_mu < 0.13 ? '#ffd166' : cy.sig_mu < 0.22 ? '#ff6b35' : '#ff4560';
+      const ql = svgEl('text', { x: pl + pw / 2, y: pt + ph - 4, fill: qcol, 'font-size': '9', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle', 'font-weight': '600' });
+      ql.textContent = `INLET: ${quality}`; svg.appendChild(ql);
+    }
+
+    // ================================================
+    // DRAW κ(μ) [NUMERICAL]
+    // ================================================
+    function drawKappa(cy) {
+      const svg = clearSvg(syncVB('svg-kap').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      grid(svg, 5, 4);
+
+      const ptsPerSeg = 40, totalPts = 5 * ptsPerSeg;
+      const kpts = [];
+      for (let si = 0; si < 5; si++) {
+        const k0 = cy.kaps[si], k1 = cy.kaps[(si + 1) % 5];
+        for (let i = 0; i < ptsPerSeg; i++) {
+          const t2 = i / ptsPerSeg;
+          let kk;
+          if (si === 4) {
+            kk = k0 + (k1 - k0) * t2 + (cy.kaps[4] - 1) * 1.2 * Math.sin(Math.PI * t2);
+          } else {
+            kk = k0 + (k1 - k0) * (1 - Math.cos(Math.PI * t2)) / 2;
+          }
+          kpts.push(Math.max(0.95, kk));
+        }
+      }
+
+      const kmin = Math.min(...kpts) * 0.9, kmax = Math.max(...kpts) * 1.12;
+      const txI = i => pl + i / totalPts * pw;
+      const tyK = k => pt + ph - (k - kmin) / (kmax - kmin) * ph;
+
+      const y1 = tyK(1.0);
+      svg.appendChild(svgEl('line', { x1: pl, y1: y1, x2: pl + pw, y2: y1, stroke: 'rgba(0,232,150,0.2)', 'stroke-width': '0.8', 'stroke-dasharray': '2,3' }));
+      const r1l = svgEl('text', { x: pl + pw - 2, y: y1 - 2, fill: 'rgba(0,232,150,0.4)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      r1l.textContent = 'κ=1 (rev.)'; svg.appendChild(r1l);
+
+      const slbls = ["1→1'", "1'→2'", "2'→3", "3→4", "4→1"];
+      // [FIX v3.2] grid(svg,5,4) already drew these 5 verticals — drawing them
+      // again here doubled every line. Text only now.
+      slbls.forEach((lbl, i) => {
+        const x = pl + i * pw / 5;
+        const t = svgEl('text', { x: x + 2, y: pt + ph - 3, fill: '#2a3a4a', 'font-size': '7.5', 'font-family': 'IBM Plex Mono' });
+        t.textContent = lbl; svg.appendChild(t);
+      });
+
+      const spkK = Math.max(...kpts.slice(4 * ptsPerSeg));
+      const spkLbl = svgEl('text', { x: txI(4.5 * ptsPerSeg), y: tyK(spkK) - 5, fill: 'var(--orange)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      spkLbl.textContent = '⚡ PHASE ΔH'; svg.appendChild(spkLbl);
+
+      const turbK = Math.max(...kpts.slice(ptsPerSeg, 2 * ptsPerSeg));
+      const turbLbl = svgEl('text', { x: txI(1.5 * ptsPerSeg), y: tyK(turbK) - 5, fill: 'var(--cyan)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      turbLbl.textContent = '← σ_μ effect'; svg.appendChild(turbLbl);
+
+      const dimPts = kpts.map((k, i) => ({ x: txI(i), y: tyK(k) }));
+      const dp = mkPath(dimPts, { stroke: '#ffd166', 'stroke-width': '1', opacity: '0.15' });
+      if (dp) svg.appendChild(dp);
+
+      const t = tick / TICKS;
+      const segStart = step * ptsPerSeg;
+      const curIdx = Math.min(segStart + Math.max(0, Math.floor(t * ptsPerSeg)), segStart + ptsPerSeg - 1);
+      if (segStart > 0) {
+        const prevPts = kpts.slice(0, segStart).map((k, i) => ({ x: txI(i), y: tyK(k) }));
+        const pp = mkPath(prevPts, { stroke: '#ffd166', 'stroke-width': '1.5', opacity: '0.5' });
+        if (pp) svg.appendChild(pp);
+      }
+      const animPts = kpts.slice(segStart, curIdx + 1).map((k, i) => ({ x: txI(segStart + i), y: tyK(k) }));
+      if (animPts.length >= 2) {
+        const ap = mkPath(animPts, { stroke: '#ffd166', 'stroke-width': '2.2' });
+        if (ap) svg.appendChild(ap);
+      }
+      const curK = kpts[curIdx];
+      const dotX = txI(curIdx), dotY = tyK(curK);
+      svg.appendChild(svgEl('circle', { cx: dotX, cy: dotY, r: '4', fill: '#ffd166' }));
+      const labelX = curIdx > totalPts * 0.8 ? dotX - 52 : dotX + 4;
+      const kt = svgEl('text', { x: labelX, y: dotY - 3, fill: '#ffd166', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+      kt.textContent = `κ=${curK.toFixed(3)}`; svg.appendChild(kt);
+      const tt = svgEl('text', { x: labelX, y: dotY + 9, fill: '#00e896', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+      tt.textContent = `τ=${(1 / curK).toFixed(3)}`; svg.appendChild(tt);
+    }
+
+    // ================================================
+    // DRAW η vs σ_μ [CONJECTURE] — FIXED RECOVERY ARROW
+    // ================================================
+    function drawEta(cy) {
+      const svg = clearSvg(syncVB('svg-eta').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      grid(svg, 5, 4);
+      const sigMin = 0.02, sigMax = 0.55;
+      const etaMin = cy.eta_cl * 0.52, etaMax = cy.eta_cl * 1.02;
+      const txS = s => pl + (s - sigMin) / (sigMax - sigMin) * pw;
+      const tyE = e => pt + ph - (e - etaMin) / (etaMax - etaMin) * ph;
+
+      const xlb = svgEl('text', { x: pl + pw / 2, y: pt + ph + 17, fill: '#3a5070', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      xlb.textContent = 'σ_μ →'; svg.appendChild(xlb);
+      const ylb = svgEl('text', { x: 6, y: pt + ph / 2, fill: '#3a5070', 'font-size': '7', 'font-family': 'IBM Plex Mono', transform: `rotate(-90,6,${pt + ph / 2})`, 'text-anchor': 'middle' });
+      ylb.textContent = 'η (%)'; svg.appendChild(ylb);
+
+      const yc = tyE(cy.eta_cl);
+      svg.appendChild(svgEl('line', { x1: pl, y1: yc, x2: pl + pw, y2: yc, stroke: 'rgba(0,232,150,0.3)', 'stroke-width': '1', 'stroke-dasharray': '4,3' }));
+      const cl = svgEl('text', { x: pl + pw - 2, y: yc - 3, fill: 'rgba(0,232,150,0.5)', 'font-size': '7', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      cl.textContent = `η_cl=${(cy.eta_cl * 100).toFixed(1)}%`; svg.appendChild(cl);
+
+      // TMF curve: η vs σ_μ
+      const curvePts = [];
+      for (let i = 0; i <= 80; i++) {
+        const sig = sigMin + (sigMax - sigMin) * i / 80;
+        const delta = sig * sig * cy.kap_peak * KAPPA_SENS;
+        const etmf = cy.eta_cl * Math.max(0.55, 1 - delta);
+        curvePts.push({ x: txS(sig), y: tyE(etmf) });
+      }
+      const cp = mkPath(curvePts, { stroke: 'var(--purple)', 'stroke-width': '2' });
+      if (cp) svg.appendChild(cp);
+      const fillD = curvePts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+        + ` L${txS(sigMax)},${pt + ph} L${txS(sigMin)},${pt + ph} Z`;
+      svg.appendChild(svgEl('path', { d: fillD, fill: 'var(--purple)', opacity: '0.07' }));
+
+      // Carnot limit line. eta_carnot > eta_cl always, so this used to be silently
+      // clipped and never drawn; pin it to the top edge with a label instead.
+      const ycarRaw = tyE(cy.eta_carnot_mean);
+      const ycar = Math.max(pt + 1, Math.min(pt + ph, ycarRaw));
+      svg.appendChild(svgEl('line', { x1: pl, y1: ycar, x2: pl + pw, y2: ycar, stroke: 'rgba(255,209,102,0.35)', 'stroke-width': '0.8', 'stroke-dasharray': '3,3' }));
+      const carLbl = svgEl('text', { x: pl + 3, y: ycar + (ycarRaw < pt ? 8 : -3), fill: 'rgba(255,209,102,0.6)', 'font-size': '7', 'font-family': 'IBM Plex Mono' });
+      carLbl.textContent = `Carnot(T̄)=${(cy.eta_carnot_mean * 100).toFixed(1)}%${ycarRaw < pt ? ' ↑' : ''}`;
+      svg.appendChild(carLbl);
+
+      // IDEAL POINT (σ=0.04)
+      const sig_ideal = SIG_IDEAL;
+      const cx0 = txS(sig_ideal);
+      const etmf0 = cy.etmf_ideal;
+      const cy0 = tyE(etmf0);
+      svg.appendChild(svgEl('circle', { cx: cx0, cy: cy0, r: '4', fill: 'var(--green)', opacity: '0.9' }));
+      const gl = svgEl('text', { x: cx0 + 5, y: cy0 - 3, fill: 'var(--green)', 'font-size': '7', 'font-family': 'IBM Plex Mono' });
+      gl.textContent = `ideal → ${(etmf0 * 100).toFixed(1)}%`; svg.appendChild(gl);
+
+      // CURRENT POINT
+      const cx = txS(cy.sig_mu);
+      const etmf_curr = cy.etmf;
+      const cy2 = tyE(etmf_curr);
+      svg.appendChild(svgEl('line', { x1: cx, y1: pt, x2: cx, y2: pt + ph, stroke: 'rgba(0,212,255,0.4)', 'stroke-width': '1', 'stroke-dasharray': '2,2' }));
+      svg.appendChild(svgEl('circle', { cx, cy: cy2, r: '5', fill: 'var(--cyan)', opacity: '0.3' }));
+      svg.appendChild(svgEl('circle', { cx, cy: cy2, r: '3', fill: 'var(--cyan)' }));
+
+      // RECOVERY ARROW: always show from current TO ideal if there's a gap
+      // This is the "ha csökkentem a σ_μ-t, ennyit nyerek" arrow
+      if (cy.sig_mu > sig_ideal + 0.005) {
+        const recoveryPP = cy.recovery_pp;
+        // Arrow from current UP to ideal level
+        svg.appendChild(svgEl('line', { x1: cx, y1: cy2, x2: cx0 + 5, y2: cy0, stroke: 'var(--green)', 'stroke-width': '1.5', 'stroke-dasharray': '3,2' }));
+        // Arrow label
+        const midX = (cx + cx0) / 2;
+        const midY = (cy2 + cy0) / 2;
+        const gl2 = svgEl('text', { x: midX, y: midY - 7, fill: 'var(--green)', 'font-size': '10', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle', 'font-weight': '600' });
+        gl2.textContent = `+${recoveryPP.toFixed(2)}pp recovery`; svg.appendChild(gl2);
+      }
+
+      const cl2 = svgEl('text', { x: cx + 4, y: cy2 + 11, fill: 'var(--cyan)', 'font-size': '7', 'font-family': 'IBM Plex Mono' });
+      cl2.textContent = `now ${(etmf_curr * 100).toFixed(1)}%`; svg.appendChild(cl2);
+
+      [0.1, 0.2, 0.3, 0.4, 0.5].forEach(sv => {
+        const x = txS(sv);
+        const t = svgEl('text', { x, y: pt + ph + 13, fill: '#2a3a4a', 'font-size': '6.5', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+        t.textContent = sv.toFixed(1); svg.appendChild(t);
+      });
+    }
+
+    // ================================================
+    // DRAW TURBINE INLET DECOMPOSITION — THE MONEY PANEL
+    // ================================================
+    function drawInlet(cy) {
+      const svg = clearSvg('svg-inlet');
+      // [FIX v3.2] v3.1 had viewBox height 165 while this function laid out to
+      // H = 170 — the third "design factor" line (y = 167.6) fell outside the
+      // viewBox and was invisible in all four columns. W widened 1200 -> 1600 so
+      // the band fills the panel without needing preserveAspectRatio="none".
+      const W = 1600, H = 186;
+      const margin = { l: 12, r: 12, t: 18, b: 30 };
+
+      const nPanels = 4;
+      const panelW = (W - margin.l - margin.r - (nPanels - 1) * 8) / nPanels;
+      const panelH = H - margin.t - margin.b;
+
+      const components = [
+        {
+          key: 'sT', val: P.sT, label: 'σ_T — Temperature Gradient', unit: '°C gradient', color: '#ff6b35',
+          desc: ['Pipe geometry', 'Insulation quality', 'Heat exchanger design'],
+          physical: `ΔT≈${(P.sT * 80).toFixed(0)}°C across section`
+        },
+        {
+          key: 'sR', val: P.sR, label: 'σ_ρ — Density Spread', unit: 'pressure non-uniformity', color: '#b06cff',
+          desc: ['Pressure regulators', 'Phase equilibrium', 'Flow distribution'],
+          physical: `Δρ≈${(P.sR * 25).toFixed(1)}% inhomogeneity`
+        },
+        {
+          key: 'sV', val: P.sV, label: 'σ_v — Velocity Profile', unit: 'Re-dependent', color: '#ffd166',
+          desc: ['Reynolds number', 'Pipe bends/elbows', 'Straightener distance'],
+          physical: `Re≈${(P.sV < 0.08 ? 'laminar' : P.sV < 0.15 ? 'transition' : 'turbulent')}`
+        },
+        {
+          key: 'mu', val: cy.sig_mu, label: 'σ_μ — Resultant Inlet State', unit: '√(σ_T²+σ_ρ²+σ_v²)', color: '#00d4ff',
+          desc: ['Total irreversibility', 'TMF κ(μ) peak', 'η loss driver'],
+          physical: `κ_drive=${cy.kap_drive.toFixed(3)} · κ_peak=${cy.kap_peak.toFixed(3)}`
+        },
+      ];
+
+      function qualLabel(sig, thresholds) {
+        if (sig < thresholds[0]) return ['EXCELLENT', '#00e896'];
+        if (sig < thresholds[1]) return ['GOOD', '#ffd166'];
+        if (sig < thresholds[2]) return ['TYPICAL', '#ff6b35'];
+        return ['POOR', '#ff4560'];
+      }
+
+      function gauss(x, mu, sig) {
+        const z = (x - mu) / sig;
+        return Math.exp(-0.5 * z * z) / (sig * Math.sqrt(2 * Math.PI));
+      }
+
+      components.forEach((comp, idx) => {
+        const px = margin.l + idx * (panelW + 8);
+        const py = margin.t;
+
+        svg.appendChild(svgEl('rect', {
+          x: px, y: py - 14, width: panelW, height: H - (py - 14) - 8,
+          fill: idx === 3 ? 'rgba(0,212,255,0.08)' : '#161b26',
+          stroke: idx === 3 ? 'rgba(0,212,255,0.3)' : '#1e2a3a',
+          rx: '4', 'stroke-width': idx === 3 ? '1.5' : '0.8'
+        }));
+
+        const titleEl = svgEl('text', {
+          x: px + panelW / 2, y: py - 3, fill: comp.color,
+          'font-size': '8.5', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle', 'font-weight': '600'
+        });
+        titleEl.textContent = comp.label; svg.appendChild(titleEl);
+
+        const cw = panelW - 20, ch = panelH * 0.48;
+        const cx = px + 10, cy2 = py + ch + 10;
+
+        const sigIdealVal = 15 + SIG_IDEAL * 80 * (idx === 3 ? 1 : 0.5);
+        const sigCurr = 15 + comp.val * 80 * (idx === 3 ? 1 : 0.5);
+
+        // Dinamikus xMin és xMax, így a görbe sosem úszik ki a keretből
+        const xMin = Math.max(0, P.Tsh - sigCurr * 3.5);
+        const xMax = P.Tsh + sigCurr * 3.5;
+
+        const txL = v => cx + (v - xMin) / (xMax - xMin) * cw;
+        const tyL = v => cy2 - v * ch;
+
+        svg.appendChild(svgEl('line', { x1: cx, y1: cy2, x2: cx + cw, y2: cy2, stroke: '#2a3a4a', 'stroke-width': '0.8' }));
+
+        const N = 120;
+        let idealPts = [], currPts = [], mx = 0, mxi = 0;
+        for (let i = 0; i <= N; i++) {
+          const T = xMin + (xMax - xMin) * i / N;
+          const yi = gauss(T, P.Tsh, sigIdealVal);
+          const yc = gauss(T, P.Tsh, sigCurr);
+          idealPts.push({ x: T, y: yi }); if (yi > mx) mx = yi;
+          currPts.push({ x: T, y: yc }); if (yc > mxi) mxi = yc;
+        }
+        const scI = mx > 0 ? 0.85 / mx : 0;
+        const scC = mxi > 0 ? 0.85 / mxi : 0;
+
+        const fillD = currPts.map((p, i) => `${i ? 'L' : 'M'}${txL(p.x).toFixed(1)},${tyL(p.y * scC).toFixed(1)}`).join(' ')
+          + ` L${txL(xMax)},${cy2.toFixed(1)} L${txL(xMin)},${cy2.toFixed(1)} Z`;
+        svg.appendChild(svgEl('path', { d: fillD, fill: comp.color, opacity: '0.12' }));
+
+        const idealSvg = idealPts.map((p, i) => ({ x: txL(p.x), y: tyL(p.y * scI) }));
+        const ipth = mkPath(idealSvg, { stroke: '#00e896', 'stroke-width': '1', opacity: '0.5', 'stroke-dasharray': '3,2' });
+        if (ipth) svg.appendChild(ipth);
+
+        const currSvg = currPts.map((p, i) => ({ x: txL(p.x), y: tyL(p.y * scC) }));
+        const cpth = mkPath(currSvg, { stroke: comp.color, 'stroke-width': '1.8' });
+        if (cpth) svg.appendChild(cpth);
+
+        const thresholds = idx === 0 ? [0.05, 0.12, 0.22] :
+          idx === 1 ? [0.04, 0.09, 0.15] :
+            idx === 2 ? [0.04, 0.10, 0.18] :
+              [0.07, 0.14, 0.22];
+        const [qlabel, qcolor] = qualLabel(comp.val, thresholds);
+
+        const sigY = cy2 + 18;
+        const sv = svgEl('text', {
+          x: px + panelW / 2, y: sigY, fill: qcolor,
+          'font-size': '13', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle', 'font-weight': '600'
+        });
+        sv.textContent = qlabel; svg.appendChild(sv);
+
+        const sv2 = svgEl('text', {
+          x: px + panelW / 2, y: sigY + 14, fill: comp.color,
+          'font-size': '10', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle'
+        });
+        sv2.textContent = `σ = ${comp.val.toFixed(3)}`; svg.appendChild(sv2);
+
+        const physY = sigY + 28;
+        const physEl = svgEl('text', {
+          x: px + panelW / 2, y: physY, fill: '#4a6070',
+          'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle'
+        });
+        physEl.textContent = comp.physical; svg.appendChild(physEl);
+
+        comp.desc.forEach((d, di) => {
+          const dl = svgEl('text', {
+            x: px + panelW / 2, y: physY + 13 + di * 11, fill: '#2a3a4a',
+            'font-size': '7.5', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle'
+          });
+          dl.textContent = '→ ' + d; svg.appendChild(dl);
+        });
+
+        // Component contribution / recovery — FIXED: always show potential recovery
+        if (idx < 3) {
+          // [FIX v3.2] v3.1 used hard-coded per-component targets 0.05/0.03/0.04,
+          // whose resultant is sqrt(.05^2+.03^2+.04^2) = 0.0707, NOT SIG_IDEAL = 0.04.
+          // The three numbers therefore missed the headline recovery by 11.6%.
+          // Scaling every component by the same factor restores the identity
+          //   sum(recovery_i) == recovery_pp   exactly, since sum(sigma_i^2) = sigma_mu^2.
+          const shrink = cy.sig_mu > 1e-9 ? SIG_IDEAL / cy.sig_mu : 1;
+          const idealVal = comp.val * shrink;
+          const diff = comp.val * comp.val - idealVal * idealVal;
+          const recoveryFromThis = diff * cy.kap_drive * KAPPA_SENS * cy.eta_cl * 100;
+          const contEl = svgEl('text', {
+            x: px + panelW - 5, y: py + 12, fill: recoveryFromThis > 0.005 ? '#ff4560' : '#00e896',
+            'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end'
+          });
+          contEl.textContent = recoveryFromThis > 0.005 ? `−${recoveryFromThis.toFixed(2)}pp` : '✓ optimal';
+          svg.appendChild(contEl);
+        } else {
+          // Total panel
+          const gainEl = svgEl('text', {
+            x: px + panelW - 5, y: py + 12, fill: '#00e896',
+            'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end'
+          });
+          gainEl.textContent = cy.recovery_pp > 0.01 ? `+${cy.recovery_pp.toFixed(2)}pp recoverable` : '✓ near ideal';
+          svg.appendChild(gainEl);
+        }
+      });
+
+      // Connector arrows
+      for (let i = 0; i < 3; i++) {
+        const x1 = margin.l + (i + 1) * (panelW + 8) - 4;
+        const y1 = margin.t + panelH * 0.25;
+        svg.appendChild(svgEl('text', { x: x1, y: y1, fill: '#2a3a4a', 'font-size': '14', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' })).textContent = i < 2 ? '+' : '→';
+      }
+
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      const fml = svgEl('text', {
+        x: W / 2, y: 13, fill: 'rgba(0,212,255,0.4)',
+        'font-size': '9', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle'
+      });
+      fml.textContent = `σ_μ² = σ_T² + σ_ρ² + σ_v²  [CONJECTURE]  ·  Δη ∼ Var(μ)  [Uni_Relatio_TMF.md §4.3]`; svg.appendChild(fml);
+    }
+
+    // ================================================
+    // ANIMATION
+    // ================================================
+    const STEP_LABELS = [
+      "1→1': Superheating (isobaric, P=const)",
+      "1'→2': Turbine expansion",
+      "2'→3: Condenser (isobaric condensation)",
+      "3→4: Pump (η_p — near-isentropic liquid compression)",
+      "4→1: Boiler (heating + evaporation ⚡)"
+    ];
+
+    const ANNOTS = [
+      {
+        t: "Superheating 1→1'",
+        b: "Isobaric heating above saturation. μ(W) NARROWS — the steam homogenises as it moves away from the phase boundary. σ_T and σ_v can be reduced with good pipe geometry. This is where the investment pays off."
+      },
+      {
+        t: "Turbine 1'→2' ← σ_μ critical here",
+        b: "THE KEY MOMENT. σ_μ = √(σ_T²+σ_ρ²+σ_v²) determines irreversibility. Narrow, symmetric μ(W) → near-vertical T-s line → maximum work. Every 0.01 increase in σ_μ costs efficiency."
+      },
+      {
+        t: "Condenser 2'→3",
+        b: "Isobaric condensation at T_cond. μ(W) contracts to ordered liquid state. Heat rejected. Horizontal T-s line."
+      },
+      {
+        t: "Pump 3→4",
+        b: "Near-isentropic liquid compression at η_p. Only the loss term (w_p − w_p,s) raises T and generates entropy — about 0.4 °C at defaults. μ(W) very narrow, κ(μ)≈1, minimal work input."
+      },
+      {
+        t: "Boiler + Phase Change 4→1 ⚡",
+        b: "PHASE TRANSITION SPIKE. Latent heat redistribution → explosive κ(μ) peak. Clausius-Clapeyron = high-curvature manifold. The thermodynamic signature of Rankine — visible only in TMF."
+      }
+    ];
+
+    function updStepUI() {
+      document.getElementById('step-lbl').textContent = STEP_LABELS[step];
+      document.getElementById('ts-lbl').textContent = `STEP ${step + 1}/5`;
+      const an = ANNOTS[step];
+      document.getElementById('annot').innerHTML = `<strong>${an.t}</strong>${an.b}`;
+      document.querySelectorAll('.sdot').forEach((d, i) => {
+        d.className = 'sdot';
+        if (i === step) d.classList.add('ac');
+        else if (i < step) d.classList.add('dn');
+      });
+    }
+
+    // [FIX v3.2] one cycle evaluation per frame instead of six
+    function render(cy) {
+      if (!cy) cy = rankine();
+      drawTS(cy); drawMu(cy); drawKappa(cy); drawEta(cy); drawInlet(cy);
+      document.getElementById('ts-lbl').textContent = `STEP ${step + 1}/5`;
+    }
+
+    // [FIX v3.2] delta-time animation — v3.1 advanced a fixed amount per frame,
+    // so the whole cycle ran 2.4x faster on a 144 Hz display than on 60 Hz.
+    let lastTs = 0;
+    function loop(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(100, ts - lastTs);
+      lastTs = ts;
+      tick += dt * TICKS / STEP_MS;
+      if (tick >= TICKS) { tick = 0; step = (step + 1) % 5; updStepUI(); }
+      render();
+      if (playing) raf = requestAnimationFrame(loop);
+    }
+
+    function togglePlay() {
+      playing = !playing;
+      const bp = document.getElementById('btn-play');
+      if (playing) {
+        bp.textContent = '⏸ PAUSE'; bp.style.borderColor = 'var(--orange)'; bp.style.color = 'var(--orange)';
+        lastTs = 0;
+        raf = requestAnimationFrame(loop);
+      } else {
+        bp.textContent = '▶ PLAY'; bp.style.borderColor = 'var(--green)'; bp.style.color = 'var(--green)';
+        cancelAnimationFrame(raf);
+      }
+    }
+    function prevStep() {
+      playing = false;
+      const bp = document.getElementById('btn-play');
+      bp.textContent = '▶ PLAY'; bp.style.borderColor = 'var(--green)'; bp.style.color = 'var(--green)';
+      step = (step + 4) % 5; tick = 0; updStepUI(); render();
+    }
+    function nextStep() {
+      playing = false;
+      const bp = document.getElementById('btn-play');
+      bp.textContent = '▶ PLAY'; bp.style.borderColor = 'var(--green)'; bp.style.color = 'var(--green)';
+      step = (step + 1) % 5; tick = 0; updStepUI(); render();
+    }
+
+    updStepUI();
+    up();
+    // the viewBoxes are derived from the rendered element size, so re-fit on resize
+    let resizeT = 0;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeT);
+      resizeT = setTimeout(() => up(), 120);
+    });
+  </script>
+</body>
+
+</html>

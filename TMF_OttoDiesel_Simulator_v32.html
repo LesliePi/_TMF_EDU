@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TMF — Otto & Diesel Cycle Simulator v3</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+    :root {
+      --bg: #0a0c10;
+      --bg2: #10141c;
+      --bg3: #161b26;
+      --border: #1e2a3a;
+      --text: #c8d8e8;
+      --dim: #4a6070;
+      --cyan: #00d4ff;
+      --orange: #ff6b35;
+      --green: #00e896;
+      --yellow: #ffd166;
+      --purple: #b06cff;
+      --red: #ff4560;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(0, 212, 255, .015) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, .015) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0
+    }
+
+    /* HEADER */
+    .hdr {
+      position: relative;
+      z-index: 1;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0
+    }
+
+    .hdr h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff
+    }
+
+    .hdr h1 span {
+      color: var(--purple)
+    }
+
+    .hdr-right {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 2px;
+      letter-spacing: .1em
+    }
+
+    .badge-o {
+      background: rgba(0, 212, 255, .12);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 212, 255, .3)
+    }
+
+    .badge-d {
+      background: rgba(255, 107, 53, .12);
+      color: var(--orange);
+      border: 1px solid rgba(255, 107, 53, .3)
+    }
+
+    /* LAYOUT */
+    .body {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex: 1;
+      min-height: 0
+    }
+
+    /* LEFT PANEL */
+    .left {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 12px
+    }
+
+    .sec {
+      margin-bottom: 14px
+    }
+
+    .sec-lbl {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: .15em;
+      color: var(--dim);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+      margin-bottom: 8px
+    }
+
+    .tab-grp {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 4px
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 6px 0;
+      border: none;
+      background: transparent;
+      color: var(--dim);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .tab-btn.ao {
+      background: rgba(0, 212, 255, .15);
+      color: var(--cyan)
+    }
+
+    .tab-btn.ad {
+      background: rgba(255, 107, 53, .15);
+      color: var(--orange)
+    }
+
+    .sl-row {
+      margin-bottom: 8px
+    }
+
+    .sl-hdr {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px
+    }
+
+    .sl-name {
+      font-size: 11px;
+      color: var(--text)
+    }
+
+    .sl-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--cyan);
+      min-width: 60px;
+      text-align: right
+    }
+
+    input[type=range] {
+      width: 100%;
+      height: 3px;
+      -webkit-appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer
+    }
+
+    .step-track {
+      display: flex;
+      gap: 3px;
+      margin-bottom: 4px
+    }
+
+    .sdot {
+      flex: 1;
+      height: 5px;
+      border-radius: 3px;
+      background: var(--border);
+      cursor: pointer;
+      transition: background .3s
+    }
+
+    .sdot.ac {
+      background: var(--cyan)
+    }
+
+    .sdot.ad2 {
+      background: var(--orange)
+    }
+
+    .sdot.dn {
+      background: rgba(0, 212, 255, .3)
+    }
+
+    .sdot.dd {
+      background: rgba(255, 107, 53, .3)
+    }
+
+    .step-lbl {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--dim);
+      text-align: center;
+      margin-bottom: 5px
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 4px
+    }
+
+    .btn {
+      flex: 1;
+      padding: 6px 0;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: .1em;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: all .2s
+    }
+
+    .btn:hover {
+      border-color: var(--cyan);
+      color: var(--cyan)
+    }
+
+    .btn-play {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0, 232, 150, .06)
+    }
+
+    .m-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px;
+      background: var(--bg3);
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      margin-bottom: 4px
+    }
+
+    .m-name {
+      font-size: 10px;
+      color: var(--dim)
+    }
+
+    .m-val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px
+    }
+
+    .annot {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--purple);
+      padding: 8px 10px;
+      border-radius: 0 4px 4px 0;
+      font-size: 10px;
+      line-height: 1.5;
+      color: var(--dim)
+    }
+
+    .annot strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 3px;
+      font-size: 11px
+    }
+
+    .gain-box {
+      background: var(--bg3);
+      border: 1px solid rgba(0, 212, 255, .2);
+      border-radius: 4px;
+      padding: 8px;
+      margin-top: 6px
+    }
+
+    .gain-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      font-size: 10px
+    }
+
+    .gain-total {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding-top: 4px;
+      margin-top: 2px
+    }
+
+    /* RIGHT: SVG panels */
+    .right {
+      flex: 1;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      min-width: 0
+    }
+
+    .panel {
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+      min-height: 0
+    }
+
+    .panel svg {
+      width: 100%;
+      height: 100%;
+      display: block
+    }
+
+    .panel-title {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: .12em;
+      color: var(--dim);
+      text-transform: uppercase;
+      pointer-events: none;
+      z-index: 2
+    }
+
+    .panel-step {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      color: var(--cyan);
+      z-index: 2
+    }
+  </style>
+</head>
+
+<body>
+  <div class="hdr">
+    <div>
+      <div
+        style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:.2em;margin-bottom:2px">
+        THERMODYNAMIC MANIFOLD FRAMEWORK</div>
+      <h1><span>TMF</span> — Otto & Diesel + Thermal Management v3.2</h1>
+    </div>
+    <div class="hdr-right">
+      <span class="badge badge-o">OTTO</span>
+      <span class="badge badge-d">DIESEL</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim)">Tatai, L. · 2026</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- LEFT -->
+    <div class="left">
+
+      <div class="sec">
+        <div class="sec-lbl">Cycle</div>
+        <div class="tab-grp">
+          <button class="tab-btn ao" id="btn-otto" onclick="setCycle('otto')">OTTO</button>
+          <button class="tab-btn" id="btn-diesel" onclick="setCycle('diesel')">DIESEL</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Parameters</div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">Compression ratio r <span id="r-range-hint" style="color:var(--dim);font-size:9px">(knock-limited)</span></span><span class="sl-val" id="v-r">10.0</span>
+          </div>
+          <input type="range" id="s-r" min="6" max="14" value="10" step="0.5" oninput="up()">
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">T₁ ambient (K / °C)</span><span class="sl-val" id="v-t1">308 /
+              35°C</span></div>
+          <input type="range" id="s-t1" min="253" max="378" value="308" step="1" oninput="up()">
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">💧 Humidity RH%</span><span class="sl-val" id="v-rh">50%</span>
+          </div>
+          <input type="range" id="s-rh" min="0" max="100" value="50" step="5" oninput="up()">
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">Q_in (kJ/kg)</span><span class="sl-val" id="v-qin">1800</span></div>
+          <input type="range" id="s-qin" min="500" max="3500" value="1800" step="50" oninput="up()">
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">σ_μ (κ spread)</span><span class="sl-val" id="v-sig">0.18</span>
+          </div>
+          <input type="range" id="s-sig" min="0" max="0.5" value="0.18" step="0.01" oninput="up()">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl" style="color:var(--cyan)">❄/🔥 Thermal Mgmt</div>
+        <div style="display:flex;gap:4px;margin-bottom:6px">
+          <button class="btn" id="btn-tm-off"
+            style="border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)"
+            onclick="setTM(false)">OFF</button>
+          <button class="btn" id="btn-tm-on" onclick="setTM(true)">ON</button>
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">Target T₁ (K)</span><span class="sl-val" id="v-ttarget">293 /
+              20°C</span></div>
+          <input type="range" id="s-ttarget" min="253" max="360" value="293" step="1" oninput="up()">
+        </div>
+        <div class="sl-row">
+          <div class="sl-hdr"><span class="sl-name">HX efficiency η_hx</span><span class="sl-val" id="v-hx">0.70</span>
+          </div>
+          <input type="range" id="s-hx" min="0.2" max="0.95" value="0.70" step="0.05" oninput="up()">
+        </div>
+        <div class="gain-box" id="gain-box">
+          <div
+            style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--dim);margin-bottom:5px;letter-spacing:.1em">
+            GAIN vs SAME ENGINE, TM OFF</div>
+          <div class="gain-row" title="More air per stroke → more fuel → more power"><span style="color:var(--dim)">Charge density Δρ</span><span
+              style="font-family:'IBM Plex Mono',monospace;color:var(--cyan)" id="g-dens">—</span></div>
+          <div class="gain-row" title="True mixture-γ effect of a drier charge at fixed r — genuinely small"><span style="color:var(--dim)">γ shift (fixed r)</span><span
+              style="font-family:'IBM Plex Mono',monospace;color:var(--dim)" id="g-dry">—</span></div>
+          <div class="gain-row" title="Cooler charge → higher autoignition-limited compression ratio"><span style="color:var(--dim)">Knock headroom</span><span
+              style="font-family:'IBM Plex Mono',monospace;color:var(--green)" id="g-knock">—</span></div>
+          <div class="gain-row"><span style="color:var(--dim)">HX parasitic</span><span
+              style="font-family:'IBM Plex Mono',monospace;color:var(--red)" id="g-par">—</span></div>
+          <div class="gain-total">
+            <span style="color:#fff;font-weight:600;font-size:11px">NET</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600" id="g-net">—</span>
+          </div>
+          <div class="gain-row" style="margin-top:3px"><span style="color:var(--dim)">on a 100 kW engine</span><span
+              style="font-family:'IBM Plex Mono',monospace;color:var(--yellow)" id="g-kw">—</span></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Animation</div>
+        <div class="step-track" id="step-track">
+          <div class="sdot ac" data-s="0" onclick="gS(0)"></div>
+          <div class="sdot" data-s="1" onclick="gS(1)"></div>
+          <div class="sdot" data-s="2" onclick="gS(2)"></div>
+          <div class="sdot" data-s="3" onclick="gS(3)"></div>
+        </div>
+        <div class="step-lbl" id="step-lbl">1→2: Adiabatic Compression</div>
+        <div class="btn-row">
+          <button class="btn" onclick="pStep(-1)">◀</button>
+          <button class="btn btn-play" id="btn-play" onclick="tPlay()">▶ PLAY</button>
+          <button class="btn" onclick="pStep(1)">▶</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Metrics</div>
+        <div class="m-row"><span class="m-name">η classical</span><span class="m-val" id="m-eta-cl"
+            style="color:var(--dim)">—</span></div>
+        <div class="m-row"><span class="m-name">η TMF</span><span class="m-val" id="m-eta-tmf"
+            style="color:var(--purple)">—</span></div>
+        <div class="m-row"><span class="m-name">Δη loss</span><span class="m-val" id="m-deta"
+            style="color:var(--red)">—</span></div>
+        <div class="m-row"><span class="m-name">PV work area</span><span class="m-val" id="m-area"
+            style="color:var(--orange)">—</span></div>
+        <div class="m-row"><span class="m-name">Operating limit</span><span class="m-val" id="m-optr"
+            style="color:var(--green)">—</span></div>
+        <div class="m-row"><span class="m-name">r_c cutoff (=f(Q_in))</span><span class="m-val" id="m-rc"
+            style="color:var(--orange)">—</span></div>
+        <div class="m-row" title="Ratio of specific heats at intake and through combustion — holding it constant is what the cold-air-standard cycle gets wrong"><span class="m-name">γ intake → comb.</span><span class="m-val" id="m-gam"
+            style="color:var(--cyan)">—</span></div>
+        <div class="m-row" title="Peak temperature and pressure"><span class="m-name">T₃ / P_max</span><span class="m-val" id="m-t3"
+            style="color:var(--orange)">—</span></div>
+        <div class="m-row" title="Air-standard efficiency is exactly independent of T1; the only coupling is humidity"><span class="m-name">T₁ sens (fixed r)</span><span class="m-val" id="m-sens"
+            style="color:var(--dim)">—</span></div>
+        <div class="m-row" title="Efficiency change when r follows the knock limit — the real thermal-management lever"><span class="m-name">T₁ sens (knock-lim)</span><span class="m-val" id="m-sensk"
+            style="color:var(--purple)">—</span></div>
+        <div class="m-row"><span class="m-name">κ(μ) current</span><span class="m-val" id="m-kap"
+            style="color:var(--yellow)">—</span></div>
+        <div class="m-row"><span class="m-name">τ internal</span><span class="m-val" id="m-tau"
+            style="color:var(--green)">—</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">TMF Insight</div>
+        <div class="annot" id="annot"><strong>Step 1</strong>Select a step.</div>
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT SVG panels -->
+    <div class="right">
+      <div class="panel">
+        <div class="panel-title">P–V DIAGRAM</div>
+        <div class="panel-step" id="pv-lbl"></div>
+        <svg id="svg-pv" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel">
+        <div class="panel-title">μ(W) DISTRIBUTION</div>
+        <svg id="svg-mu" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel">
+        <div class="panel-title">κ(μ) ALONG CYCLE</div>
+        <svg id="svg-kap" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel">
+        <div class="panel-title">EFFICIENCY COMPARISON</div>
+        <svg id="svg-eta" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+
+  <script>
+    // ================================================
+    // STATE
+    // ================================================
+    let mode = 'otto', playing = false, step = 0, tick = 0, raf = 0, tmOn = false;
+    const TICKS = 80;
+    const STEP_MS = 1600;              // wall-clock ms per cycle step (delta-time)
+
+    let P = { r: 10, T1: 308, RH: 50, Qin: 1800, rc: 2.5, sig: 0.18, Ttarget: 293, hx: 0.70 };
+
+    // ================================================
+    // MOIST AIR + VARIABLE SPECIFIC HEATS  [PROVEN]
+    // ================================================
+    // [FIX v3.2] v3.1 still used constant c_p (the "cold-air-standard" cycle). That
+    // idealisation is what made the numbers look wrong: c_v for air rises from 0.718
+    // at 300 K to ~1.00 at 2500 K, so holding it constant
+    //   - understated the temperature rise denominator => T3 = 3236 K, above any
+    //     hydrocarbon flame (adiabatic limit ~2600 K),
+    //   - kept gamma at 1.40 through combustion instead of letting it fall to ~1.30,
+    //     which overstated efficiency by ~7 pp and peak pressure by ~20 bar.
+    // Now c_p(T) comes from NASA 7-coefficient polynomials for N2/O2/Ar/CO2/H2O.
+    // Verified against literature: species c_p within 0.4%, dry-air c_p within 0.2%
+    // over 300-3000 K, M = 28.965 g/mol, gamma 1.401 (300 K) -> 1.285 (3000 K).
+    const P_AMB_KPA = 100;              // ambient pressure the model normalises to (= P1)
+    const R_UNIV = 8.31446;             // J/mol·K
+
+    // cp/R = a1 + a2 T + a3 T^2 + a4 T^3 + a5 T^4     (Gordon–McBride / CHEMKIN)
+    const SPECIES = {
+      N2:  { lo: [3.298677, 1.4082404e-3, -3.963222e-6, 5.641515e-9, -2.444854e-12],
+             hi: [2.926640, 1.4879768e-3, -5.684760e-7, 1.0097038e-10, -6.753351e-15], M: 28.0134 },
+      O2:  { lo: [3.212936, 1.1274864e-3, -5.756150e-7, 1.3138773e-9, -8.768554e-13],
+             hi: [3.697578, 6.135197e-4, -1.2588420e-7, 1.7752810e-11, -1.1364354e-15], M: 31.9988 },
+      H2O: { lo: [3.386842, 3.474982e-3, -6.354696e-6, 6.968581e-9, -2.506588e-12],
+             hi: [2.672146, 3.056293e-3, -8.730260e-7, 1.2009964e-10, -6.391618e-15], M: 18.0153 },
+      CO2: { lo: [2.275725, 9.922072e-3, -1.0409113e-5, 6.866687e-9, -2.117280e-12],
+             hi: [4.453623, 3.140169e-3, -1.278411e-6, 2.393997e-10, -1.669033e-14], M: 44.0095 },
+      Ar:  { lo: [2.5, 0, 0, 0, 0], hi: [2.5, 0, 0, 0, 0], M: 39.948 }
+    };
+    const X_DRY = { N2: 0.78084, O2: 0.20946, Ar: 0.00934, CO2: 0.00036 };
+
+    function cpMolar(s, T) {
+      const a = T < 1000 ? SPECIES[s].lo : SPECIES[s].hi;
+      return R_UNIV * (a[0] + a[1] * T + a[2] * T * T + a[3] * T ** 3 + a[4] * T ** 4);
+    }
+
+    // [NUMERICAL] end-gas autoignition temperature proxy, ~95 RON gasoline
+    const T_AUTOIGNITION = 750;         // K
+    const R_LIMITS = { otto: [6, 14], diesel: [14, 24] };
+
+    function pSat(T_K) {                // Tetens saturation pressure, kPa
+      const t = T_K - 273.15;
+      return 0.6108 * Math.exp(17.27 * t / (t + 237.3));
+    }
+
+    // ---- property tables u(T) and phi(T) = ∫ c_v/T dT, per water-vapour content ----
+    // Isentropic steps then reduce to  phi(T_b) - phi(T_a) = R ln(V_a/V_b),
+    // which is the textbook "variable specific heats" formulation.
+    const T_LO = 200, T_HI = 4500, T_DT = 5, N_T = (T_HI - T_LO) / T_DT + 1;
+    const TBL_CACHE = new Map();
+
+    function tables(xv) {
+      const key = Math.round(xv * 2000);
+      const hit = TBL_CACHE.get(key);
+      if (hit) return hit;
+      const X = {};
+      for (const s in X_DRY) X[s] = X_DRY[s] * (1 - xv);
+      X.H2O = (X.H2O || 0) + xv;
+      let M = 0;
+      for (const s in X) M += X[s] * SPECIES[s].M;
+      const R = R_UNIV / M;                       // kJ/(kg·K)
+      const cv = new Float64Array(N_T), u = new Float64Array(N_T), ph = new Float64Array(N_T);
+      for (let i = 0; i < N_T; i++) {
+        const T = T_LO + i * T_DT;
+        let cpm = 0;
+        for (const s in X) cpm += X[s] * cpMolar(s, T);
+        cv[i] = cpm / M - R;                      // kJ/(kg·K)
+      }
+      for (let i = 1; i < N_T; i++) {
+        const Ta = T_LO + (i - 1) * T_DT, Tb = T_LO + i * T_DT;
+        u[i]  = u[i - 1]  + 0.5 * (cv[i - 1] + cv[i]) * T_DT;
+        ph[i] = ph[i - 1] + 0.5 * (cv[i - 1] / Ta + cv[i] / Tb) * T_DT;
+      }
+      const o = { R, M, cv, u, ph, xv };
+      if (TBL_CACHE.size > 512) TBL_CACHE.clear();
+      TBL_CACHE.set(key, o);
+      return o;
+    }
+
+    function tAt(arr, T) {
+      const x = (Math.max(T_LO, Math.min(T_HI, T)) - T_LO) / T_DT;
+      const i = Math.min(N_T - 2, Math.max(0, Math.floor(x)));
+      return arr[i] + (arr[i + 1] - arr[i]) * (x - i);
+    }
+    function tInv(arr, v) {               // arr is monotone increasing in T
+      if (v <= arr[0]) return T_LO;
+      if (v >= arr[N_T - 1]) return T_HI;
+      let lo = 0, hi = N_T - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m; else hi = m; }
+      return T_LO + (lo + (v - arr[lo]) / (arr[hi] - arr[lo])) * T_DT;
+    }
+
+    // Mixture composition and the *local* gamma, for display and for the humidity rows.
+    function air(RH, T) {
+      const xv = Math.max(0, Math.min(0.95, (RH / 100) * pSat(T) / P_AMB_KPA));
+      const t = tables(xv);
+      const cvT = tAt(t.cv, T);
+      return { xv, g: (cvT + t.R) / cvT, Cv: cvT, cp: cvT + t.R, R: t.R, M: t.M };
+    }
+
+    // Air-standard indicated efficiency with variable specific heats. [PROVEN]
+    function etaIdeal(r, xv, T1, Qin) {
+      const t = tables(xv), R = t.R;
+      const T2 = tInv(t.ph, tAt(t.ph, T1) + R * Math.log(r));
+      let T3, V3overV1;
+      if (mode === 'otto') {
+        T3 = tInv(t.u, tAt(t.u, T2) + Qin);
+        V3overV1 = 1 / r;
+      } else {
+        const hT = T => tAt(t.u, T) + R * T, tgt = hT(T2) + Qin;
+        let lo = T2, hi = T_HI;
+        for (let k = 0; k < 50; k++) { const m2 = (lo + hi) / 2; if (hT(m2) < tgt) lo = m2; else hi = m2; }
+        T3 = (lo + hi) / 2;
+        V3overV1 = (T3 / T2) / r;
+      }
+      const T4 = tInv(t.ph, tAt(t.ph, T3) + R * Math.log(V3overV1));
+      const qin = mode === 'otto'
+        ? tAt(t.u, T3) - tAt(t.u, T2)
+        : (tAt(t.u, T3) + R * T3) - (tAt(t.u, T2) + R * T2);
+      const qout = tAt(t.u, T4) - tAt(t.u, T1);
+      return qin > 0 ? 1 - qout / qin : 0;
+    }
+
+    // Knock limit: the r at which the compression-end temperature reaches T_AUTOIGNITION.
+    // With variable c_v this inverts cleanly:  r = exp((phi(T_ai) - phi(T1)) / R).
+    function rKnock(T1, xv) {
+      const t = tables(xv);
+      return Math.exp((tAt(t.ph, T_AUTOIGNITION) - tAt(t.ph, T1)) / t.R);
+    }
+
+    // Temperature along an isentrope, given the volume ratio from a known state.
+    function tIsentropic(xv, Tref, volRatio) {   // volRatio = V_ref / V
+      const t = tables(xv);
+      return tInv(t.ph, tAt(t.ph, Tref) + t.R * Math.log(volRatio));
+    }
+
+    function effT1() {
+      if (!tmOn) return P.T1;
+      // Heat exchanger moves T1 toward Ttarget with efficiency hx
+      return P.T1 + P.hx * (P.Ttarget - P.T1);
+    }
+
+    function cycle(T1_override) {
+      const T1 = T1_override !== undefined ? T1_override : effT1();
+      // Intercooling conserves ABSOLUTE humidity; below the dewpoint the excess
+      // condenses out, so RH is recomputed rather than carried over. [PROVEN]
+      let RH_eff;
+      if (tmOn) {
+        const xv_orig = (P.RH / 100) * pSat(P.T1) / P_AMB_KPA;
+        const xv_sat = pSat(T1) / P_AMB_KPA;
+        RH_eff = Math.min(100, (Math.min(xv_orig, xv_sat) / xv_sat) * 100);
+      } else {
+        RH_eff = P.RH;
+      }
+      const xv = Math.max(0, Math.min(0.95, (RH_eff / 100) * pSat(T1) / P_AMB_KPA));
+      const t = tables(xv), R = t.R;
+
+      const V1 = 1, V2 = V1 / P.r, P1 = P_AMB_KPA;
+
+      // 1→2 isentropic compression, variable c_v  [PROVEN]
+      const T2 = tInv(t.ph, tAt(t.ph, T1) + R * Math.log(P.r));
+      const P2 = P1 * P.r * T2 / T1;                      // ideal gas, exact
+
+      let T3, V3, P3, rc;
+      if (mode === 'otto') {
+        rc = 1;
+        T3 = tInv(t.u, tAt(t.u, T2) + P.Qin);             // isochoric: Q = Δu
+        V3 = V2; P3 = P2 * (T3 / T2);
+      } else {
+        // isobaric: Q = Δh.  r_c is NOT free — the injected heat fixes it.
+        const hT = T => tAt(t.u, T) + R * T, tgt = hT(T2) + P.Qin;
+        let lo = T2, hi = T_HI;
+        for (let k = 0; k < 50; k++) { const mm = (lo + hi) / 2; if (hT(mm) < tgt) lo = mm; else hi = mm; }
+        T3 = (lo + hi) / 2;
+        rc = T3 / T2; V3 = V2 * rc; P3 = P2;
+      }
+      P.rc = rc;
+
+      // 3→4 isentropic expansion back to BDC
+      const V4 = V1;
+      const T4 = tInv(t.ph, tAt(t.ph, T3) + R * Math.log(V3 / V4));
+      const P4 = P1 * T4 / T1;
+
+      // Energy balance is now the DEFINITION of the efficiency — there is no
+      // closed form once c_v varies with T.
+      const q_in = mode === 'otto'
+        ? tAt(t.u, T3) - tAt(t.u, T2)
+        : (tAt(t.u, T3) + R * T3) - (tAt(t.u, T2) + R * T2);
+      const q_out = tAt(t.u, T4) - tAt(t.u, T1);
+      const ecl = q_in > 0 ? Math.max(0, 1 - q_out / q_in) : 0;
+
+      // local gammas — worth showing, because their spread IS the correction
+      const cv1 = tAt(t.cv, T1), cvC = tAt(t.cv, (T2 + T3) / 2);
+      const g = (cv1 + R) / cv1;                          // intake gamma
+      const g_comb = (cvC + R) / cvC;                     // gamma through combustion
+      const Cv = cv1, cp = cv1 + R;
+
+      const r_knock = rKnock(T1, xv);
+      const P_max = Math.max(P2, P3);
+      const knocking = (mode === 'otto') && (P.r > r_knock + 1e-9);
+      // The air-standard cycle accepts any Q_in; no hydrocarbon–air flame exceeds
+      // ~2600 K adiabatic. With variable c_v this now only fires for genuinely
+      // over-rich heat inputs, not for every default.
+      const T3_unphysical = T3 > 2900;
+
+      // κ variation along the cycle [NUMERICAL — heuristic]
+      const kaps = [1, 1 + 0.4 * (T2 - T1) / T1, 1 + 0.4 * (T3 - T1) / T1, 1.05];
+      const km = kaps.reduce((a, b) => a + b) / 4;
+      const ks = (Math.max(...kaps) - Math.min(...kaps)) / km;
+      // [NUMERICAL] NOT the gamma effect (that is inside ecl now): slower flame
+      // propagation and lower flame temperature with a wetter charge.
+      const hum_pen = xv * 0.8;
+      const etmf = ecl * Math.max(0.4, 1 - P.sig * P.sig * ks - hum_pen);   // [CONJECTURE]
+
+      const rho = (1 - 0.378 * xv) / T1;
+      const xv0 = 0.5 * pSat(308) / P_AMB_KPA;
+      const rho_b = (1 - 0.378 * xv0) / 308;
+
+      return {
+        st: [
+          { V: V1, P: P1, T: T1, label: '1' },
+          { V: V2, P: P2, T: T2, label: '2' },
+          { V: V3, P: P3, T: T3, label: '3' },
+          { V: V4, P: P4, T: T4, label: '4' }
+        ],
+        ecl, etmf, g, g_comb, Cv, cp, R, xv, kaps, km, ks, rc, q_in, q_out,
+        r_knock, P_max, knocking, T3_unphysical, T1eff: T1, rho, rho_r: rho / rho_b
+      };
+    }
+
+    // [FIX v3.2] With variable c_v the isentrope is not P·v^γ = const, so the area is
+    // integrated along the real path T(v) taken from the property tables.
+    function pvArea(cy) {
+      const s = cy.st, N = 120;
+      const isenP = (from, v) => {
+        const T = tIsentropic(cy.xv, from.T, from.V / v);
+        return from.P * (from.V / v) * (T / from.T);
+      };
+      let a = 0;
+      for (let i = 0; i < N; i++) {                 // 1→2 compression (negative)
+        const v1 = s[0].V + (s[1].V - s[0].V) * i / N, v2 = s[0].V + (s[1].V - s[0].V) * (i + 1) / N;
+        a += (isenP(s[0], v1) + isenP(s[0], v2)) / 2 * (v2 - v1);
+      }
+      if (mode === 'diesel') a += s[2].P * (s[2].V - s[1].V);
+      for (let i = 0; i < N; i++) {                 // 3→4 expansion (positive)
+        const v1 = s[2].V + (s[3].V - s[2].V) * i / N, v2 = s[2].V + (s[3].V - s[2].V) * (i + 1) / N;
+        a += (isenP(s[2], v1) + isenP(s[2], v2)) / 2 * (v2 - v1);
+      }
+      return Math.abs(a);
+    }
+
+    // [FIX v3.1] optR() maximised pvArea*ecl. For Otto pvArea = m*Q_in*ecl, so the
+    // objective was m*Q_in*ecl^2 — strictly increasing in r. It therefore returned 22
+    // for every input, in both modes, and in Otto 22 was outside the slider range.
+    // There is no interior optimum in an air-standard cycle: efficiency rises
+    // monotonically with r. The binding constraint is knock (see cycle()).
+
+    // ================================================
+    // SVG DRAWING HELPERS
+    // ================================================
+    const NS = 'http://www.w3.org/2000/svg';
+    function svgEl(tag, attrs) {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      return e;
+    }
+    function clearSvg(id) {
+      const s = document.getElementById(id);
+      while (s.firstChild) s.removeChild(s.firstChild);
+      return s;
+    }
+
+    // [FIX v3.1] The panels sit in a 2x2 grid (~820x505 px) but the viewBox was
+    // 400x300 with preserveAspectRatio="none", stretching every label ~22%
+    // horizontally. The viewBox aspect is now taken from the real element size.
+    const VB = { w: 400, h: 300, pl: 42, pr: 16, pt: 30, pb: 30 };
+    // [FIX v3.2] The first attempt pinned VB.w to 400, which on an 818 px panel meant
+    // a 2.05x scale: the labels doubled in size and the plot lost 23% of its vertical
+    // units. Pin the SCALE instead (px per viewBox unit), so text keeps the weight it
+    // had in v3 and the plot area grows with the panel. Aspect is preserved exactly.
+    const DESIGN_PX = 1.7;
+    function syncVB(id) {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      if (r.width > 4 && r.height > 4) {
+        const sc = Math.max(r.width / 900, Math.min(r.width / 300, DESIGN_PX));
+        VB.w = Math.round(r.width / sc);
+        VB.h = Math.round(r.height / sc);
+      }
+      el.setAttribute('viewBox', `0 0 ${VB.w} ${VB.h}`);
+      return el;
+    }
+
+    function grid(svg, xN = 5, yN = 4) {
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      for (let i = 0; i <= xN; i++) {
+        const x = pl + i * pw / xN;
+        svg.appendChild(svgEl('line', { x1: x, y1: pt, x2: x, y2: pt + ph, stroke: '#1e2a3a', 'stroke-width': '0.5' }));
+      }
+      for (let i = 0; i <= yN; i++) {
+        const y = pt + i * ph / yN;
+        svg.appendChild(svgEl('line', { x1: pl, y1: y, x2: pl + pw, y2: y, stroke: '#1e2a3a', 'stroke-width': '0.5' }));
+      }
+      // axes
+      svg.appendChild(svgEl('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#2a3a4a', 'stroke-width': '1' }));
+      svg.appendChild(svgEl('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#2a3a4a', 'stroke-width': '1' }));
+    }
+
+    function mkPath(pts, attrs) {
+      if (!pts.length) return null;
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      return svgEl('path', { d, ...attrs, fill: 'none' });
+    }
+
+    // ================================================
+    // DRAW P-V
+    // ================================================
+    function drawPV(cy) {
+      const svg = clearSvg(syncVB('svg-pv').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const s = cy.st;
+      const vMin = s[1].V * 0.5;  // breathing room left of V2 (TDC)
+      const vMax = s[0].V * 1.06;
+      const pMax = s[2].P * 1.12;
+      const tx = v => pl + (v - vMin) / (vMax - vMin) * pw;
+      const ty = p => pt + ph - (p / pMax) * ph;
+
+      grid(svg);
+
+      // Axis labels
+      const xlb = svgEl('text', { x: pl + pw - 2, y: pt + ph + 16, fill: '#3a5070', 'font-size': '9', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      xlb.textContent = 'V →'; svg.appendChild(xlb);
+      const ylb = svgEl('text', { x: 8, y: pt + ph / 2, fill: '#3a5070', 'font-size': '9', 'font-family': 'IBM Plex Mono', transform: `rotate(-90,8,${pt + ph / 2})`, 'text-anchor': 'middle' });
+      ylb.textContent = 'P →'; svg.appendChild(ylb);
+
+      // Adiabatic helper
+      // [FIX v3.2] With variable specific heats P·v^γ = const no longer holds, so the
+      // adiabat is drawn from the tabulated isentrope T(v) instead of a fixed exponent.
+      function adPts(v1, p1, v2, T1s, xv, N = 80) {
+        const pts = [];
+        for (let i = 0; i <= N; i++) {
+          const v = v1 + (v2 - v1) * i / N;
+          const T = tIsentropic(xv, T1s, v1 / v);
+          pts.push({ x: tx(v), y: ty(p1 * (v1 / v) * (T / T1s)) });
+        }
+        return pts;
+      }
+
+      // Ghost: baseline (no TM) or cooled ghost
+      // cyAnim = the cycle the animation dot should follow
+      let cyAnim = cy;
+      if (mode === 'otto') {
+        // [FIX v3.2] v3 wrote `tmOn ? P.T1 : effT1()`, but effT1() returns P.T1 when
+        // TM is off — so the green "cooled target" ghost sat exactly on the solid
+        // curve and was invisible. Compute the cooled state explicitly.
+        const T1ghost = tmOn ? P.T1 : (P.T1 + P.hx * (P.Ttarget - P.T1));
+        const cyG = cycle(T1ghost);
+        const sg = cyG.st;
+        const col = tmOn ? 'rgba(74,96,112,0.45)' : 'rgba(0,232,150,0.4)';
+        const dash = '4,3';
+        const gPts = [
+          ...adPts(sg[0].V, sg[0].P, sg[1].V, sg[0].T, cyG.xv),
+          { x: tx(sg[1].V), y: ty(sg[1].P) }, { x: tx(sg[2].V), y: ty(sg[2].P) },
+          ...adPts(sg[2].V, sg[2].P, sg[3].V, sg[2].T, cyG.xv),
+          { x: tx(sg[3].V), y: ty(sg[3].P) }, { x: tx(sg[0].V), y: ty(sg[0].P) }
+        ];
+        const gp = mkPath(gPts, { stroke: col, 'stroke-width': '1', 'stroke-dasharray': dash });
+        if (gp) svg.appendChild(gp);
+        const gl = svgEl('text', { x: pl + 4, y: pt + 14, fill: tmOn ? '#4a6070' : '#00e896', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        gl.textContent = tmOn ? 'baseline (warm)' : '❄ cooled target'; svg.appendChild(gl);
+        // When TM OFF: animate on the ghost (cooled) curve, not the warm baseline
+        if (!tmOn) cyAnim = cyG;
+      }
+
+      // Use cyAnim state points and γ for all animation
+      const sAnim = cyAnim.st;
+
+      // Stepwise colors
+      const scols = mode === 'otto'
+        ? ['#00d4ff', '#ffd166', '#00e896', '#b06cff']
+        : ['#ff6b35', '#ffd166', '#00e896', '#b06cff'];
+
+      // Draw completed steps
+      function drawSeg(si, alpha) {
+        const col = scols[si];
+        let pts;
+        if (si === 0) pts = adPts(s[0].V, s[0].P, s[1].V, s[0].T, cy.xv);
+        else if (si === 1) pts = [{ x: tx(s[1].V), y: ty(s[1].P) }, { x: tx(s[2].V), y: ty(s[2].P) }];
+        else if (si === 2) pts = adPts(s[2].V, s[2].P, s[3].V, s[2].T, cy.xv);
+        else pts = [{ x: tx(s[3].V), y: ty(s[3].P) }, { x: tx(s[0].V), y: ty(s[0].P) }];
+        const p = mkPath(pts, { stroke: col, 'stroke-width': '2', opacity: alpha });
+        if (p) svg.appendChild(p);
+      }
+
+      for (let si = 0; si < step; si++) drawSeg(si, 0.7);
+
+      // Animated current step — follows cyAnim curve
+      const t = tick / TICKS;
+      const col = scols[step];
+      let curPts;
+      if (step === 0 || step === 2) {
+        const from = step === 0 ? sAnim[0] : sAnim[2], to = step === 0 ? sAnim[1] : sAnim[3];
+        const N = Math.max(2, Math.floor(80 * t));
+        curPts = [];
+        for (let i = 0; i <= N; i++) {
+          const v = from.V + (to.V - from.V) * i / 80;
+          const Ta = tIsentropic(cyAnim.xv, from.T, from.V / v);
+          curPts.push({ x: tx(v), y: ty(from.P * (from.V / v) * (Ta / from.T)) });
+        }
+      } else {
+        const from = sAnim[step], to = sAnim[(step + 1) % 4];
+        curPts = [
+          { x: tx(from.V), y: ty(from.P) },
+          { x: tx(from.V + (to.V - from.V) * t), y: ty(from.P + (to.P - from.P) * t) }
+        ];
+      }
+      const cp = mkPath(curPts, { stroke: col, 'stroke-width': '2.5' });
+      if (cp) svg.appendChild(cp);
+
+      // Moving dot
+      if (curPts && curPts.length > 1) {
+        const lp = curPts[curPts.length - 1];
+        svg.appendChild(svgEl('circle', { cx: lp.x, cy: lp.y, r: '5', fill: col, opacity: '0.4' }));
+        svg.appendChild(svgEl('circle', { cx: lp.x, cy: lp.y, r: '3', fill: '#fff' }));
+      }
+
+      // State point labels
+      s.forEach((st, i) => {
+        const ac = i === step || i === (step + 1) % 4;
+        svg.appendChild(svgEl('circle', { cx: tx(st.V), cy: ty(st.P), r: ac ? '5' : '3', fill: ac ? '#fff' : '#2a3a4a', stroke: scols[0], 'stroke-width': ac ? '1' : '0' }));
+        const t2 = svgEl('text', { x: tx(st.V) + 6, y: ty(st.P) - 4, fill: ac ? '#fff' : '#3a5070', 'font-size': ac ? '10' : '9', 'font-family': 'IBM Plex Mono', 'font-weight': ac ? 'bold' : 'normal' });
+        t2.textContent = st.label; svg.appendChild(t2);
+      });
+
+      // Knock limit — the constraint that actually binds on a spark-ignition engine,
+      // and the one that moves when you cool the intake.
+      if (mode === 'otto') {
+        const rk = cy.r_knock;
+        if (isFinite(rk) && rk > 1) {
+          const vk = 1 / rk;
+          if (vk > vMin && vk < vMax) {
+            svg.appendChild(svgEl('line', {
+              x1: tx(vk), y1: pt, x2: tx(vk), y2: pt + ph,
+              stroke: cy.knocking ? 'rgba(255,69,96,0.55)' : 'rgba(0,232,150,0.35)',
+              'stroke-width': '1', 'stroke-dasharray': '2,3'
+            }));
+            const kl = svgEl('text', { x: tx(vk) + 3, y: pt + 24, fill: cy.knocking ? '#ff4560' : 'rgba(0,232,150,.6)', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+            kl.textContent = `knock r=${rk.toFixed(1)}`; svg.appendChild(kl);
+          }
+        }
+        const ort = svgEl('text', { x: pl + 3, y: pt + ph - 4, fill: cy.knocking ? '#ff4560' : '#00e896', 'font-size': '8', 'font-family': 'IBM Plex Mono', 'font-weight': cy.knocking ? '600' : '400' });
+        ort.textContent = cy.knocking
+          ? `⚠ KNOCK  r=${P.r} > ${cy.r_knock.toFixed(1)}`
+          : `✓ knock margin  Δr=${(cy.r_knock - P.r).toFixed(1)}`;
+        svg.appendChild(ort);
+      } else {
+        const ort = svgEl('text', { x: pl + 3, y: pt + ph - 4, fill: 'rgba(0,232,150,.5)', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        ort.textContent = `P_max=${(cy.P_max / 100).toFixed(0)} bar · r_c=${cy.rc.toFixed(2)}`;
+        svg.appendChild(ort);
+      }
+      if (cy.T3_unphysical) {
+        const wt = svgEl('text', { x: pl + 3, y: pt + ph - 14, fill: '#ff4560', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        wt.textContent = `⚠ T₃=${cy.st[2].T.toFixed(0)}K > adiabatic flame limit`;
+        svg.appendChild(wt);
+      }
+    }
+
+    // ================================================
+    // DRAW μ(W)
+    // ================================================
+    function drawMu(cy) {
+      const svg = clearSvg(syncVB('svg-mu').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const s = cy.st;
+      const Tmin = s[0].T * 0.85, Tmax = s[2].T * 1.1;
+      const tx = T => pl + (T - Tmin) / (Tmax - Tmin) * pw;
+      const N = 200;
+
+      grid(svg, 5, 4);
+
+      const xlb = svgEl('text', { x: pl + pw / 2, y: pt + ph + 16, fill: '#3a5070', 'font-size': '9', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      xlb.textContent = 'T (temperature) →'; svg.appendChild(xlb);
+
+      function gauss(T, mu, sig, skew = 0) {
+        const z = (T - mu) / sig;
+        const ph2 = Math.exp(-0.5 * z * z) / (sig * Math.sqrt(2 * Math.PI));
+        const Phi = 0.5 * (1 + Math.tanh(skew * z / Math.sqrt(2)));
+        return 2 * ph2 * Phi;
+      }
+
+      const T_cur = s[step].T + (s[(step + 1) % 4].T - s[step].T) * tick / TICKS;
+      // [FIX v3.2] v3 used an ABSOLUTE width of ~30-52 K. The T axis now spans
+      // ~2900 K (T1 to T3), so the distribution rendered as an invisible needle.
+      // Physically the spread of a thermal distribution scales WITH temperature, so
+      // σ is relative now and the curve stays legible across the whole cycle.
+      const sigRel = 0.06 + P.sig * 0.45;                    // dimensionless width
+      const relMap = [sigRel * 0.75, sigRel * 1.7, sigRel * 1.2, sigRel * 0.85];
+      const sigMap = relMap.map(f => f * Math.max(200, T_cur));
+      const skMapFull = [0, mode === 'otto' ? 2.2 : 1.8, 0.6, -0.4];
+      // Interpolate sigma and skew smoothly across step + tick progress
+      const t_mu = tick / TICKS;
+      const sigPrev = sigMap[(step + 3) % 4], sigNext = sigMap[step];
+      const sigCur = sigPrev + (sigNext - sigPrev) * t_mu;
+      const skCur = skMapFull[step] * t_mu;   // [FIX v3.1] dropped `skPrev = ... * 0`,
+                                              // a leftover that was never used anyway
+
+      function drawDist(mu, sig, skew, color, alpha, filled) {
+        let pts = [], mx = 0;
+        for (let i = 0; i <= N; i++) {
+          const T = Tmin + (Tmax - Tmin) * i / N;
+          const y = gauss(T, mu, sig, skew);
+          pts.push({ T, y }); if (y > mx) mx = y;
+        }
+        if (!(mx > 0)) return;                       // guard: empty distribution
+        const sc = (ph * 0.72) / mx;
+        const svgPts = pts.map(p => ({ x: tx(p.T), y: pt + ph - p.y * sc }));
+        if (filled) {
+          const d = svgPts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+            + ` L${tx(Tmax)},${pt + ph} L${tx(Tmin)},${pt + ph} Z`;
+          svg.appendChild(svgEl('path', { d, fill: color, opacity: (alpha * 0.25).toString() }));
+        }
+        const lp = mkPath(svgPts, { stroke: color, 'stroke-width': filled ? '2' : '1', opacity: alpha.toString() });
+        if (lp) svg.appendChild(lp);
+      }
+
+      // Reference: state 1 initial
+      drawDist(s[0].T, relMap[0] * s[0].T, 0, '#4a6070', 0.4, false);
+      // Current animated
+      const col = mode === 'otto' ? '#00d4ff' : '#ff6b35';
+      drawDist(T_cur, sigCur, skCur, col, 1, true);
+
+      // Labels
+      const lab = svgEl('text', { x: pl + pw - 2, y: pt + 14, fill: '#b06cff', 'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+      // [FIX v3.1] v3 printed this as "σ_μ", the same name as the slider, but it is a
+      // distribution WIDTH IN KELVIN divided by 100 — the slider read 0.18 while the
+      // panel read 0.39-0.88. Different quantity, so it now carries its own name.
+      lab.textContent = `σ_T≈${sigCur.toFixed(0)} K = ${(sigCur / Math.max(1, T_cur) * 100).toFixed(0)}% of T  (σ_μ=${P.sig.toFixed(2)})`; svg.appendChild(lab);
+      const lab2 = svgEl('text', { x: pl + 4, y: pt + 14, fill: '#4a6070', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+      lab2.textContent = '— μ(initial)'; svg.appendChild(lab2);
+    }
+
+    // ================================================
+    // DRAW κ(μ)  —  JAVÍTVA: ugyanaz a sebesség, mint a P-V
+    // ================================================
+    function drawKappa(cy) {
+      const svg = clearSvg(syncVB('svg-kap').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const kaps = cy.kaps;
+
+      grid(svg, 4, 4);
+
+      // Build smooth κ curve: 4 szakasz, mindegyik 50 pont
+      const ptsPerSeg = 50;
+      const totalPts = 4 * ptsPerSeg;
+      const kpts = [];
+      for (let si = 0; si < 4; si++) {
+        const k0 = kaps[si], k1 = kaps[(si + 1) % 4];
+        for (let i = 0; i < ptsPerSeg; i++) {
+          const t2 = i / ptsPerSeg;
+          let kk;
+          if (si === 1) {
+            // 2→3: isochoric / isobaric spike
+            kk = k0 + (k1 - k0) * t2 + kaps[2] * 0.3 * Math.sin(Math.PI * t2);
+          } else {
+            kk = k0 + (k1 - k0) * (1 - Math.cos(Math.PI * t2)) / 2;
+          }
+          kpts.push(kk);
+        }
+      }
+      const kmin = Math.min(...kpts) * 0.88, kmax = Math.max(...kpts) * 1.12;
+      const tx = i => pl + i / totalPts * pw, ty = k => pt + ph - (k - kmin) / (kmax - kmin) * ph;
+
+      // Mean dashed
+      const ym = ty(cy.km);
+      svg.appendChild(svgEl('line', { x1: pl, y1: ym, x2: pl + pw, y2: ym, stroke: '#2a3a4a', 'stroke-width': '1', 'stroke-dasharray': '4,3' }));
+      const ml = svgEl('text', { x: pl + pw + 2, y: ym + 3, fill: '#3a5070', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+      ml.textContent = `κ̄=${cy.km.toFixed(2)}`; svg.appendChild(ml);
+
+      // Step separators
+      ['1→2', '2→3', '3→4', '4→1'].forEach((lbl, i) => {
+        const x = pl + i * pw / 4;
+        svg.appendChild(svgEl('line', { x1: x, y1: pt, x2: x, y2: pt + ph, stroke: '#1e2a3a', 'stroke-width': '0.8' }));
+        const t = svgEl('text', { x: x + 3, y: pt + ph - 3, fill: '#2a3a4a', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        t.textContent = lbl; svg.appendChild(t);
+      });
+
+      // Full dim curve
+      const dimPts = kpts.map((k, i) => ({ x: tx(i), y: ty(k) }));
+      const dp = mkPath(dimPts, { stroke: 'rgba(255,209,102,0.2)', 'stroke-width': '1' });
+      if (dp) svg.appendChild(dp);
+
+      // ---- ANIMATION: sync with P-V ----
+      const t = tick / TICKS;  // 0..1 within current step
+      const segStart = step * ptsPerSeg;
+      // At tick=0 show at least the first point of this step
+      const curIdx = Math.min(segStart + Math.max(0, Math.floor(t * ptsPerSeg)), segStart + ptsPerSeg - 1);
+
+      // Draw completed previous steps
+      if (segStart > 0) {
+        const prevPts = kpts.slice(0, segStart).map((k, i) => ({ x: tx(i), y: ty(k) }));
+        const pp = mkPath(prevPts, { stroke: '#ffd166', 'stroke-width': '1.2', opacity: '0.5' });
+        if (pp) svg.appendChild(pp);
+      }
+      // Draw animated portion within current step (always at least 1 point)
+      const animSlice = kpts.slice(segStart, curIdx + 1);
+      const animPts = animSlice.map((k, i) => ({ x: tx(segStart + i), y: ty(k) }));
+      if (animPts.length >= 2) {
+        const ap = mkPath(animPts, { stroke: '#ffd166', 'stroke-width': '2' });
+        if (ap) svg.appendChild(ap);
+      }
+      // Always draw moving dot at curIdx
+      {
+        const curK = kpts[curIdx];
+        const dotX = tx(curIdx), dotY = ty(curK);
+        svg.appendChild(svgEl('circle', { cx: dotX, cy: dotY, r: '4', fill: '#ffd166' }));
+        // Label positioning: flip to left side if near right edge
+        const labelX = curIdx > totalPts * 0.8 ? dotX - 55 : dotX + 5;
+        const kt = svgEl('text', { x: labelX, y: dotY - 3, fill: '#ffd166', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        kt.textContent = `κ=${curK.toFixed(3)}`; svg.appendChild(kt);
+        const tt2 = svgEl('text', { x: labelX, y: dotY + 9, fill: '#00e896', 'font-size': '8', 'font-family': 'IBM Plex Mono' });
+        tt2.textContent = `τ=${(1 / curK).toFixed(3)}`; svg.appendChild(tt2);
+        // Update sidebar metrics
+        document.getElementById('m-kap').textContent = curK.toFixed(4);
+        document.getElementById('m-tau').textContent = (1 / curK).toFixed(4);
+      }
+
+      // Axes labels
+      const xl = svgEl('text', { x: pl + pw / 2, y: pt + ph + 16, fill: '#3a5070', 'font-size': '9', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      xl.textContent = 'Cycle progress →'; svg.appendChild(xl);
+      const yl = svgEl('text', { x: 8, y: pt + ph / 2, fill: '#3a5070', 'font-size': '9', 'font-family': 'IBM Plex Mono', transform: `rotate(-90,8,${pt + ph / 2})`, 'text-anchor': 'middle' });
+      yl.textContent = 'κ(μ)'; svg.appendChild(yl);
+    }
+
+    // ================================================
+    // DRAW ETA COMPARISON
+    // ================================================
+    function drawEta(cy) {
+      const svg = clearSvg(syncVB('svg-eta').id);
+      const { w, h, pl, pr, pt, pb } = VB;
+      const pw = w - pl - pr, ph = h - pt - pb;
+      const s = cy.st;
+      const Th = Math.max(...s.map(x => x.T)), Tc = Math.min(...s.map(x => x.T));
+      const eCarnot = 1 - Tc / Th;
+      const bars = [
+        { lbl: 'Carnot\nlimit', val: eCarnot, col: '#4a6070', sub: 'upper bound' },
+        { lbl: `${mode === 'otto' ? 'Otto' : 'Diesel'}\nclassical`, val: cy.ecl, col: mode === 'otto' ? 'rgba(0,212,255,0.75)' : 'rgba(255,107,53,0.75)', sub: 'ideal' },
+        { lbl: `${mode === 'otto' ? 'Otto' : 'Diesel'}\nTMF`, val: cy.etmf, col: '#b06cff', sub: 'realistic' },
+      ];
+      const emax = Math.min(1, eCarnot * 1.15);
+      const bw = pw * 0.13;
+      const tx = (i, n) => pl + pw * (i + 0.5) / n;
+      const ty = v => pt + ph - v / emax * ph;
+
+      grid(svg, 3, 4);
+
+      // Y axis labels
+      for (let i = 0; i <= 4; i++) {
+        const y = pt + i * ph / 4;
+        const t = svgEl('text', { x: pl - 3, y: y + 3, fill: '#2a3a4a', 'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'end' });
+        t.textContent = `${((1 - i / 4) * emax * 100).toFixed(0)}%`; svg.appendChild(t);
+      }
+
+      bars.forEach((b, i) => {
+        const x = tx(i, bars.length), bh = (b.val / emax) * ph, yb = ty(b.val);
+        // Bar
+        svg.appendChild(svgEl('rect', { x: x - bw / 2, y: yb, width: bw, height: bh, fill: b.col, opacity: '0.7', rx: '2' }));
+        svg.appendChild(svgEl('rect', { x: x - bw / 2, y: yb, width: bw, height: '2', fill: b.col, rx: '1' }));
+        // Value
+        const vt = svgEl('text', { x, y: yb - 4, fill: '#fff', 'font-size': '9', 'font-family': 'IBM Plex Mono', 'font-weight': 'bold', 'text-anchor': 'middle' });
+        vt.textContent = `${(b.val * 100).toFixed(1)}%`; svg.appendChild(vt);
+        // Label
+        b.lbl.split('\n').forEach((ln, li) => {
+          const lt = svgEl('text', { x, y: pt + ph + 12 + li * 10, fill: '#4a6070', 'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+          lt.textContent = ln; svg.appendChild(lt);
+        });
+      });
+
+      // Δη arrow between classical and TMF
+      const x1 = tx(1, bars.length), x2 = tx(2, bars.length);
+      const y1 = ty(cy.ecl), y2 = ty(cy.etmf);
+      const ym = (y1 + y2) / 2;
+      svg.appendChild(svgEl('line', { x1: x1 + bw / 2 + 3, y1: ym, x2: x2 - bw / 2 - 3, y2: ym, stroke: '#ff4560', 'stroke-width': '1.5', 'stroke-dasharray': '3,2' }));
+      const dt = svgEl('text', { x: (x1 + x2) / 2, y: ym - 4, fill: '#ff4560', 'font-size': '8', 'font-family': 'IBM Plex Mono', 'text-anchor': 'middle' });
+      // [FIX v3.1] `| 0` is a bitwise OR: it truncated to an integer, so a real
+      // Δη of 0.9% was drawn as "−0%" while the sidebar showed "−0.90%".
+      dt.textContent = `Δη=−${((cy.ecl - cy.etmf) * 100).toFixed(2)}%`; svg.appendChild(dt);
+
+      // Update metrics
+      document.getElementById('m-eta-cl').textContent = `${(cy.ecl * 100).toFixed(2)}%`;
+      document.getElementById('m-eta-tmf').textContent = `${(cy.etmf * 100).toFixed(2)}%`;
+      document.getElementById('m-deta').textContent = `−${((cy.ecl - cy.etmf) * 100).toFixed(2)}%`;
+      document.getElementById('m-area').textContent = pvArea(cy).toFixed(3) + ' a.u.';
+
+      // Operating limit
+      const oe = document.getElementById('m-optr');
+      if (mode === 'otto') {
+        oe.textContent = `r_knock=${cy.r_knock.toFixed(1)} (cur=${P.r})`;
+        oe.style.color = cy.knocking ? 'var(--red)' : 'var(--green)';
+      } else {
+        oe.textContent = `P_max=${(cy.P_max / 100).toFixed(0)} bar`;
+        oe.style.color = cy.P_max / 100 > 180 ? 'var(--red)' : 'var(--green)';
+      }
+      document.getElementById('m-rc').textContent = mode === 'diesel' ? cy.rc.toFixed(2) : '— (Otto)';
+      document.getElementById('m-gam').textContent = `${cy.g.toFixed(3)} → ${cy.g_comb.toFixed(3)}`;
+      document.getElementById('m-t3').textContent = `${cy.st[2].T.toFixed(0)} K / ${(cy.P_max / 100).toFixed(0)} bar`;
+      document.getElementById('m-t3').style.color = cy.T3_unphysical ? 'var(--red)' : 'var(--orange)';
+
+      // T1 sensitivity at FIXED r. The air-standard efficiency 1 - r^(1-γ) is exactly
+      // independent of T1; the only coupling is through humidity, which is ~0.016 %/K.
+      // v3 reported -0.318 %/K here, purely an artefact of the 20x-too-strong γ model.
+      const sv = P.T1; P.T1 += 5;
+      const cyH = cycle(); P.T1 = sv;
+      const sens = (cyH.ecl - cy.ecl) / 5 * 100;
+      const se = document.getElementById('m-sens');
+      se.textContent = `${sens >= 0 ? '+' : ''}${sens.toFixed(4)} %/K`;
+      se.style.color = 'var(--dim)';
+
+      // T1 sensitivity THROUGH the knock limit — this is the one that matters,
+      // because a cooler charge lets you run a higher compression ratio.
+      const sk = document.getElementById('m-sensk');
+      if (mode === 'otto') {
+        const a0 = air(P.RH, P.T1), a1 = air(P.RH, P.T1 + 5);
+        const rk0 = Math.min(R_LIMITS.otto[1], rKnock(P.T1, a0.xv));
+        const rk1 = Math.min(R_LIMITS.otto[1], rKnock(P.T1 + 5, a1.xv));
+        const dk = (etaIdeal(rk1, a1.xv, P.T1 + 5, P.Qin) - etaIdeal(rk0, a0.xv, P.T1, P.Qin)) / 5 * 100;
+        sk.textContent = `${dk >= 0 ? '+' : ''}${dk.toFixed(3)} %/K`;
+        sk.style.color = 'var(--purple)';
+      } else {
+        sk.textContent = 'n/a (no knock)';
+        sk.style.color = 'var(--dim)';
+      }
+
+      // Combined gain
+      updateGain(cy);
+    }
+
+    // ================================================
+    // THERMAL MANAGEMENT GAIN
+    // ================================================
+    // [FIX v3.1] Two things were wrong in v3:
+    //  (a) the baseline was hard-wired to air(50, 308) instead of the CURRENT engine
+    //      with TM off, so at T1 = 253 K — where the heat exchanger actually WARMS the
+    //      intake from 253 K to 281 K and loses 10% of the charge density — the panel
+    //      still reported +10.8%. Sign-flipped.
+    //  (b) the "Dry air Δγ" row claimed +1.5%. The true γ effect is +0.04 pp. What the
+    //      number was really standing in for is the knock headroom, which is now its
+    //      own row and is computed honestly.
+    function updateGain(cy) {
+      const ids = ['g-dens', 'g-dry', 'g-knock', 'g-par', 'g-net', 'g-kw'];
+      const gne = document.getElementById('g-net');
+      if (!tmOn) {
+        ids.forEach(i => { document.getElementById(i).textContent = '—'; });
+        gne.style.color = 'var(--dim)';
+        return;
+      }
+      const fmt = v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+
+      // Reference = this same engine with the heat exchanger switched off.
+      const off = air(P.RH, P.T1);
+      const rho_off = (1 - 0.378 * off.xv) / P.T1;
+
+      // With TM: absolute humidity is conserved, condensation caps it.
+      const T1e = effT1();
+      const xv_sat_on = pSat(T1e) / P_AMB_KPA;
+      const xv_on = Math.min((P.RH / 100) * pSat(P.T1) / P_AMB_KPA, xv_sat_on);
+      const on = air(Math.min(100, xv_on / xv_sat_on * 100), T1e);
+      const rho_on = (1 - 0.378 * on.xv) / T1e;
+
+      // (1) charge density — more air per stroke, hence more fuel and more power [PROVEN]
+      const g_dens = (rho_on / rho_off - 1) * 100;
+
+      // (2) γ shift at the CURRENT r — informational, and honestly small [PROVEN]
+      const e_off = etaIdeal(P.r, off.xv, P.T1, P.Qin);
+      const e_on = etaIdeal(P.r, on.xv, T1e, P.Qin);
+      const g_gamma = (e_on / e_off - 1) * 100;
+
+      // (3) knock headroom — the real efficiency lever on a spark-ignition engine.
+      //     A cooler charge raises the autoignition-limited compression ratio. [NUMERICAL]
+      let g_knock = 0, knockTxt = 'n/a (Diesel)';
+      if (mode === 'otto') {
+        const rMax = R_LIMITS.otto[1];
+        const rk_off = Math.min(rMax, rKnock(P.T1, off.xv));
+        const rk_on = Math.min(rMax, rKnock(T1e, on.xv));
+        const ek_off = etaIdeal(rk_off, off.xv, P.T1, P.Qin);
+        const ek_on = etaIdeal(rk_on, on.xv, T1e, P.Qin);
+        g_knock = (ek_on / ek_off - 1) * 100;
+        knockTxt = `Δr ${rk_on - rk_off >= 0 ? '+' : ''}${(rk_on - rk_off).toFixed(2)} → ${fmt(g_knock)}`;
+      }
+
+      // (4) heat-exchanger parasitic load [NUMERICAL — heuristic]
+      const g_par = -(0.3 / P.hx);
+
+      // Net shaft power. For Otto the efficiency term is the knock-exploited one,
+      // which already contains the γ shift — so γ is NOT added again.
+      const g_eta = mode === 'otto' ? g_knock : g_gamma;
+      const g_net = ((1 + g_dens / 100) * (1 + g_eta / 100) * (1 + g_par / 100) - 1) * 100;
+
+      document.getElementById('g-dens').textContent = fmt(g_dens);
+      document.getElementById('g-dry').textContent = fmt(g_gamma);
+      document.getElementById('g-knock').textContent = knockTxt;
+      document.getElementById('g-par').textContent = fmt(g_par);
+      gne.textContent = fmt(g_net);
+      gne.style.color = g_net > 0.01 ? 'var(--green)' : g_net < -0.01 ? 'var(--red)' : 'var(--dim)';
+      document.getElementById('g-kw').textContent = `${g_net >= 0 ? '+' : ''}${(g_net).toFixed(1)} kW`;
+    }
+
+    // ================================================
+    // RENDER
+    // ================================================
+    // [FIX v3.1] one cycle() evaluation per frame instead of four (plus the 74 that
+    // optR() used to burn), and the metric readouts all come from the same object.
+    function render(cy) {
+      if (!cy) cy = cycle();
+      drawPV(cy); drawMu(cy); drawKappa(cy); drawEta(cy);
+      document.getElementById('pv-lbl').textContent = `STEP ${step + 1}/4`;
+    }
+
+    // ================================================
+    // ANIMATION LOOP
+    // ================================================
+    // [FIX v3.1] delta-time: v3 advanced a fixed amount per rendered frame, so the
+    // animation ran 2.4x faster on a 144 Hz display than on 60 Hz.
+    let lastTs = 0;
+    function loop(ts) {
+      requestAnimationFrame(loop);
+      if (!playing) { lastTs = 0; return; }
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(100, ts - lastTs);
+      lastTs = ts;
+      tick += dt * TICKS / STEP_MS;
+      if (tick >= TICKS) { tick = 0; step = (step + 1) % 4; updStepUI(); }
+      render();
+    }
+
+    // ================================================
+    // CONTROLS
+    // ================================================
+    const SLABELS_O = ['1→2: Adiabatic Compression', '2→3: Isochoric Heat Addition', '3→4: Adiabatic Expansion', '4→1: Isochoric Rejection'];
+    const SLABELS_D = ['1→2: Adiabatic Compression', '2→3: Isobaric Heat Addition (fuel inject)', '3→4: Adiabatic Expansion', '4→1: Isochoric Rejection'];
+    const ANNOTS = {
+      otto: [
+        { t: 'Adiabatic Compression (1→2)', b: 'μ(W) concentrates as gas compresses. κ(μ) increases — internal time τ=1/κ decreases. Manifold curves toward high-κ region. Lower T₁ means more ordered starting distribution.' },
+        { t: 'Isochoric Heat Addition (2→3)', b: 'Critical TMF point: V=const but μ(W) redistributes dramatically. Distribution broadens and skews. κ(μ) spikes — this is where most irreversibility is born. Dry cool air keeps μ narrower here.' },
+        { t: 'Adiabatic Expansion (3→4)', b: 'Expansion from a non-equilibrated μ. Path is NOT time-reverse of compression — asymmetry is the geometric signature of irreversibility, invisible in P–V space.' },
+        { t: 'Isochoric Heat Rejection (4→1)', b: 'μ re-concentrates as gas cools. Return path does not retrace the forward path. Enclosed manifold area > P–V area — the excess is dissipation.' }
+      ],
+      diesel: [
+        { t: 'Adiabatic Compression (1→2)', b: 'Higher r than Otto (14–22). μ concentrates strongly; κ rises sharply. Distribution very narrow at TDC — approaching the classical delta-function limit. Almost insensitive to T₁!' },
+        { t: 'Isobaric Heat Addition (2→3)', b: 'THE DIESEL MANIFOLD SLIDE: P=const forces trajectory along pressure isobar surface. μ must redistribute in T and V simultaneously + Y_i changes with fuel injection. Higher curvature path → lower efficiency than Otto at same r.' },
+        { t: 'Adiabatic Expansion (3→4)', b: 'Expansion from chemically non-equilibrated μ. Cutoff ratio r_c controls how far along the isobar μ was driven — larger r_c = more deviation from geodesic.' },
+        { t: 'Isochoric Heat Rejection (4→1)', b: 'Same as Otto. Return path gap larger than Otto at same conditions — Diesel distribution was distorted further by the isobaric constraint.' }
+      ]
+    };
+
+    function updStepUI() {
+      const lbs = mode === 'otto' ? SLABELS_O : SLABELS_D;
+      document.getElementById('step-lbl').textContent = lbs[step];
+      const an = ANNOTS[mode][step];
+      document.getElementById('annot').innerHTML = `<strong>${an.t}</strong>${an.b}`;
+      document.querySelectorAll('.sdot').forEach((d, i) => {
+        d.className = 'sdot';
+        if (i === step) d.classList.add(mode === 'otto' ? 'ac' : 'ad2');
+        else if (i < step) d.classList.add(mode === 'otto' ? 'dn' : 'dd');
+      });
+    }
+
+    function setCycle(m) {
+      mode = m;
+      document.getElementById('btn-otto').className = 'tab-btn' + (m === 'otto' ? ' ao' : '');
+      document.getElementById('btn-diesel').className = 'tab-btn' + (m === 'diesel' ? ' ad' : '');
+      // [FIX v3.1] one source of truth for the r range — v3 had three different
+      // ranges in three places (slider 4-14, hint "8-12", optR scanning 4-22).
+      const [rLo, rHi] = R_LIMITS[m];
+      const sl = document.getElementById('s-r');
+      sl.min = rLo; sl.max = rHi; sl.step = 0.5;
+      if (P.r < rLo || P.r > rHi) P.r = (m === 'otto') ? 10 : 18;
+      sl.value = P.r;
+      document.getElementById('r-range-hint').textContent =
+        m === 'otto' ? '(knock-limited)' : '(compression ignition)';
+      step = 0; tick = 0; playing = false;
+      const bp = document.getElementById('btn-play');
+      bp.textContent = '▶ PLAY'; bp.style.borderColor = 'var(--green)'; bp.style.color = 'var(--green)';
+      up(); updStepUI(); render();
+    }
+
+    function setTM(on) {
+      tmOn = on;
+      const on_btn = document.getElementById('btn-tm-on');
+      const off_btn = document.getElementById('btn-tm-off');
+      if (on) {
+        on_btn.style.cssText = 'border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)';
+        off_btn.style.cssText = 'border-color:var(--border);color:var(--dim);background:transparent';
+      } else {
+        off_btn.style.cssText = 'border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.1)';
+        on_btn.style.cssText = 'border-color:var(--border);color:var(--dim);background:transparent';
+      }
+      render();
+    }
+
+    function up() {
+      P.r = +document.getElementById('s-r').value;
+      P.T1 = +document.getElementById('s-t1').value;
+      P.RH = +document.getElementById('s-rh').value;
+      P.Qin = +document.getElementById('s-qin').value;
+      P.sig = +document.getElementById('s-sig').value;
+      P.Ttarget = +document.getElementById('s-ttarget').value;
+      P.hx = +document.getElementById('s-hx').value;
+
+      const t1eff = effT1();
+      document.getElementById('v-r').textContent = P.r.toFixed(1);
+      document.getElementById('v-t1').textContent = `${P.T1}K/${(P.T1 - 273).toFixed(0)}°C`;
+      document.getElementById('v-rh').textContent = `${P.RH}%`;
+      document.getElementById('v-qin').textContent = P.Qin.toFixed(0);
+      document.getElementById('v-sig').textContent = P.sig.toFixed(2);
+      document.getElementById('v-ttarget').textContent = `${P.Ttarget}K/${(P.Ttarget - 273).toFixed(0)}°C`;
+      document.getElementById('v-hx').textContent = P.hx.toFixed(2);
+      render();   // cycle() is evaluated once inside render()
+    }
+
+    function gS(s2) { step = s2; tick = 0; updStepUI(); if (!playing) render(); }
+
+    function pStep(d) {
+      step = (step + 4 + d) % 4; tick = 0; updStepUI(); if (!playing) render();
+    }
+
+    function tPlay() {
+      playing = !playing;
+      const bp = document.getElementById('btn-play');
+      if (playing) { bp.textContent = '⏸ PAUSE'; bp.style.borderColor = 'var(--yellow)'; bp.style.color = 'var(--yellow)'; }
+      else { bp.textContent = '▶ PLAY'; bp.style.borderColor = 'var(--green)'; bp.style.color = 'var(--green)'; }
+    }
+
+    // ================================================
+    // INIT
+    // ================================================
+    window.addEventListener('resize', () => render());
+    setCycle('otto');
+    up();
+    loop();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thermodynamic Manifold (TMF) — Interactive Cycle Simulators</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+  :root{
+    --bg:#0a0c10; --bg2:#10141c; --bg3:#161b26; --border:#1e2a3a;
+    --text:#c8d8e8; --dim:#4a6070; --cyan:#00d4ff; --orange:#ff6b35;
+    --green:#00e896; --yellow:#ffd166; --purple:#b06cff; --red:#ff4560;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    padding:56px 20px 40px;
+  }
+  h1{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:28px;
+    color:var(--cyan); letter-spacing:0.02em; text-align:center;
+  }
+  .sub{color:var(--dim); font-size:14px; margin-top:10px; text-align:center; max-width:640px; line-height:1.6;}
+  .cards{display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:44px; max-width:900px;}
+  .card{
+    background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+    width:340px; padding:26px; text-decoration:none; color:var(--text);
+    transition:border-color .15s, transform .15s;
+  }
+  .card:hover{border-color:var(--cyan); transform:translateY(-2px);}
+  .card .tag{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--green);
+    letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .card h2{font-size:19px; margin:8px 0 10px; font-weight:600;}
+  .card p{font-size:13px; color:var(--dim); line-height:1.55;}
+  .card .go{
+    display:inline-block; margin-top:16px; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; color:var(--cyan);
+  }
+  footer{
+    margin-top:60px; text-align:center; font-size:11px; color:var(--dim);
+    letter-spacing:0.02em; max-width:600px; line-height:1.7;
+  }
+  footer a{color:var(--cyan); text-decoration:none;}
+  footer a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+  <h1>THERMODYNAMIC MANIFOLD — TMF</h1>
+  <p class="sub">
+    Interactive, browser-based thermodynamic cycle simulators built for teaching —
+    real property tables (IAPWS-IF97 steam, NASA 7-coefficient gas polynomials),
+    live parameter sliders, and explicit physical-limit checks (Carnot bound, knock
+    limit, T₃ ceiling) instead of black-box numbers.
+  </p>
+
+  <div class="cards">
+    <a class="card" href="TMF_Rankine_Simulator_v32.html">
+      <div class="tag">Rankine cycle · v3.2</div>
+      <h2>Steam Power Cycle</h2>
+      <p>Boiler, turbine, condenser, pump — IAPWS-IF97 saturation &amp; superheat tables,
+      entropic-mean Carnot reference, turbine exhaust quality, entropy-generation
+      breakdown along the cycle.</p>
+      <span class="go">→ open simulator</span>
+    </a>
+    <a class="card" href="TMF_OttoDiesel_Simulator_v33.html">
+      <div class="tag">Otto &amp; Diesel · v3.3</div>
+      <h2>Internal Combustion + Turbo</h2>
+      <p>Variable specific heats (NASA polynomials), moist-air knock limit, and a
+      forced-induction module (compressor, charge-air cooling, condensation under
+      boost) — includes a worked example on cooling vs. T₃/NOx trade-offs.</p>
+      <span class="go">→ open simulator</span>
+    </a>
+  </div>
+
+  <footer>
+    Built &amp; verified by Tatai László (laszlo.tatai@outlook.com).<br>
+    Licensed <a href="LICENSE.md">CC BY 4.0</a> — free to use, adapt, and redistribute
+    in teaching, provided attribution is kept.<br>
+    Feedback, bug reports, or extension ideas are welcome via e-mail or a GitHub issue.
+  </footer>
+</body>
+</html>

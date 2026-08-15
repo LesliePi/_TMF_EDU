@@ -23,7 +23,7 @@
     color:var(--cyan); letter-spacing:0.02em; text-align:center;
   }
   .sub{color:var(--dim); font-size:14px; margin-top:10px; text-align:center; max-width:640px; line-height:1.6;}
-  .cards{display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:44px; max-width:900px;}
+  .cards{display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:44px; max-width:1120px;}
   .card{
     background:var(--bg2); border:1px solid var(--border); border-radius:10px;
     width:340px; padding:26px; text-decoration:none; color:var(--text);
@@ -54,7 +54,9 @@
     Interactive, browser-based thermodynamic cycle simulators built for teaching —
     real property tables (IAPWS-IF97 steam, NASA 7-coefficient gas polynomials),
     live parameter sliders, and explicit physical-limit checks (Carnot bound, knock
-    limit, T₃ ceiling) instead of black-box numbers.
+    limit, T₃ ceiling) instead of black-box numbers. Every constant is tagged
+    [PROVEN] / [NUMERICAL] / [CONJECTURE] in the source, so you can see what to
+    trust and what to argue with.
   </p>
 
   <div class="cards">
@@ -72,6 +74,15 @@
       <p>Variable specific heats (NASA polynomials), moist-air knock limit, and a
       forced-induction module (compressor, charge-air cooling, condensation under
       boost) — includes a worked example on cooling vs. T₃/NOx trade-offs.</p>
+      <span class="go">→ open simulator</span>
+    </a>
+    <a class="card" href="TMF_FullChain_Simulator_v19.html">
+      <div class="tag">Full chain · v1.9</div>
+      <h2>Biomass Plant — Combustion to Grid</h2>
+      <p>The whole chain in one pipeline: combustion → boiler → Rankine turbine →
+      generator. Includes a marginal-gain view that ranks every lever by what it
+      is worth at the terminals — and shows how much of a local improvement
+      survives the chain. Same IAPWS-IF97 core as the Rankine simulator.</p>
       <span class="go">→ open simulator</span>
     </a>
   </div>

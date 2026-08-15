@@ -1,0 +1,4 @@
+_verify_out/
+node_modules/
+package-lock.json
+package.json

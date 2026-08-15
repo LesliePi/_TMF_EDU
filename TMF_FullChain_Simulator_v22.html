@@ -13,7 +13,7 @@
   --bg3:    #121620;
   --border: #1c2535;
   --text:   #c5d5e8;
-  --dim:    #3d5268;
+  --dim:    #6b86a0;
   --cyan:   #00e5ff;
   --orange: #ff7043;
   --green:  #00e676;
@@ -200,9 +200,9 @@ select {
 .panel { background:var(--bg); position:relative; overflow:hidden; }
 .panel svg { width:100%; height:100%; display:block; }
 .panel canvas { position:absolute; top:0; left:0; width:100%; height:100%; }
-.panel-title { position:absolute; top:8px; left:10px; font-family:'Space Mono',monospace; font-size:8px; letter-spacing:.14em; color:var(--dim); text-transform:uppercase; pointer-events:none; z-index:2; }
-.panel-sub { position:absolute; top:20px; left:10px; font-size:9px; color:var(--dim); pointer-events:none; z-index:2; }
-.panel-step-lbl { position:absolute; top:7px; right:10px; font-family:'Space Mono',monospace; font-size:9px; color:var(--cyan); z-index:3; pointer-events:none; }
+.panel-title { position:absolute; top:8px; left:10px; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.14em; color:var(--dim); text-transform:uppercase; pointer-events:none; z-index:2; }
+.panel-sub { position:absolute; top:22px; left:10px; font-size:11px; color:var(--dim); pointer-events:none; z-index:2; }
+.panel-step-lbl { position:absolute; top:7px; right:10px; font-family:'Space Mono',monospace; font-size:11px; color:var(--cyan); z-index:3; pointer-events:none; }
 .annot-bar { flex-shrink:0; padding:8px 16px; border-top:1px solid var(--border); background:var(--bg2); font-size:11px; min-height:44px; display:flex; align-items:center; gap:10px; }
 .annot-bar strong { color:var(--cyan); }
 ::-webkit-scrollbar { width:4px; }
@@ -1989,7 +1989,78 @@ function calcImpedance(comb, boil){
 function svgEl(tag,attrs){const el=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))el.setAttribute(k,v);return el;}
 function clearSvg(id){const s=document.getElementById(id);while(s.firstChild)s.removeChild(s.firstChild);return s;}
 function mkPath(pts,attrs={}){if(!pts.length)return null;const d=pts.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');return svgEl('path',{d,fill:'none',...attrs});}
-function txt(svg,x,y,s,attrs={}){const el=svgEl('text',{x,y,fill:'#c5d5e8','font-family':'Space Mono, monospace','font-size':'9',...attrs});el.textContent=s;svg.appendChild(el);return el;}
+// ══════════════════════════════════════════════════════════════════
+//  TYPOGRAPHY FLOOR [v2.2.1]
+//
+//  The panels are SVG with viewBox="0 0 500 280" and preserveAspectRatio="none",
+//  stretched by CSS to fill their grid cell. So a font-size attribute is in USER
+//  UNITS, not pixels: what the reader actually sees is  font_user · sy , where
+//  sy = box_height / viewBox_height. Measured across all 40 text-bearing panels:
+//
+//    viewport 1600x950 — smallest text renders at a median of  9.8 px
+//    viewport 1280x800 — smallest text renders at a median of  7.8 px
+//
+//  So the same file is legible on a large monitor and not legible on a laptop.
+//  Hard-coding bigger numbers at the 273 call sites would fix the laptop and
+//  bloat the monitor, and would have to be redone for every new panel.
+//
+//  Instead the floor is enforced HERE, once, in rendered pixels. Text already
+//  above the floor is untouched — which keeps the blast radius small, because
+//  only the smallest labels move. The correction is recomputed on resize.
+//
+//  [PROVEN] the scaling algebra; [NUMERICAL] the 11 px choice — that is a
+//  readability judgement, not a physical constant.
+// ══════════════════════════════════════════════════════════════════
+const TYPO_MIN_PX = 11;   // [NUMERICAL] minimum rendered text size
+let _typoToken = 0;       // bumped on resize to invalidate the per-SVG cache
+
+function svgYScale(svg){
+  if(svg.__typoTok===_typoToken && svg.__typoSy) return svg.__typoSy;
+  let sy=1;
+  try{
+    const vb=svg.viewBox&&svg.viewBox.baseVal, bb=svg.getBoundingClientRect();
+    if(vb&&vb.height>0&&bb.height>0) sy=bb.height/vb.height;
+  }catch(e){ sy=1; }
+  if(!isFinite(sy)||sy<=0) sy=1;
+  svg.__typoSy=sy; svg.__typoTok=_typoToken;
+  return sy;
+}
+
+//  OVERFLOW GUARD. Raising the floor makes long strings wider, and the longest
+//  strings are exactly the explanatory footnotes that were set smallest. Without
+//  a guard the floor pushed 13 further panels into overflow (8 -> 21 measured).
+//  So: raise to the floor, then give back whatever does not fit — but never end
+//  up smaller than the size the call site asked for. Labels that cannot reach
+//  the floor are counted in TYPO_STATS so the compromise stays visible instead
+//  of silently degrading.
+const TYPO_STATS={raised:0,capped:0,total:0};
+
+function txt(svg,x,y,s,attrs={}){
+  const el=svgEl('text',{x,y,fill:'#c5d5e8','font-family':'Space Mono, monospace','font-size':'9',...attrs});
+  el.textContent=s;svg.appendChild(el);
+  TYPO_STATS.total++;
+  const sy=svgYScale(svg);
+  const req=parseFloat(el.getAttribute('font-size'))||9;
+  const floorUser=TYPO_MIN_PX/sy;
+  if(!(floorUser>req)) return el;               // already at or above the floor
+
+  el.setAttribute('font-size',floorUser.toFixed(2));
+  // How much horizontal room does this label actually have, given its anchor?
+  const vb=svg.viewBox&&svg.viewBox.baseVal;
+  if(vb&&vb.width>0){
+    const a=el.getAttribute('text-anchor')||'start';
+    const avail=a==='end'?x:(a==='middle'?2*Math.min(x,vb.width-x):vb.width-x);
+    let w=0; try{w=el.getBBox().width;}catch(e){w=0;}
+    if(w>avail&&avail>0){
+      const fit=Math.max(req,floorUser*(avail/w)*0.98);
+      el.setAttribute('font-size',fit.toFixed(2));
+      TYPO_STATS.capped++;
+      return el;
+    }
+  }
+  TYPO_STATS.raised++;
+  return el;
+}
 function rect(svg,x,y,w,h,fill,op=1,rx=2){svg.appendChild(svgEl('rect',{x,y,width:w,height:h,fill,opacity:op,rx}));}
 function gridLines(svg,W,H,nx=5,ny=4,pl=40,pt=20,pr=10,pb=25){
   const pw=W-pl-pr,ph=H-pt-pb;
@@ -2001,17 +2072,17 @@ function gridLines(svg,W,H,nx=5,ny=4,pl=40,pt=20,pr=10,pb=25){
 function drawCombustion(c){
   const s1=clearSvg('svg-comb-sankey'),W=500,H=280;
   rect(s1,0,0,W,H,'transparent');
-  txt(s1,8,16,'COMBUSTION HEAT BALANCE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s1,8,16,'COMBUSTION HEAT BALANCE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const bars=[{label:'Q_in (fuel)',val:c.Q_in,color:'#ff7043'},{label:'Q_useful',val:c.Q_useful,color:'#00e676'},
     {label:'Moisture loss',val:c.Q_in*(1-c.eta_c)*0.4,color:'#ffea00'},{label:'Flue gas loss',val:c.Q_in*(1-c.eta_c)*0.6,color:'#ff1744'}];
   const maxV=bars[0].val,bx=60,bh=36,gap=14;
   bars.forEach((b,i)=>{const bw=Math.max(8,(b.val/maxV)*340),by=30+i*(bh+gap);
     rect(s1,bx,by,bw,bh,b.color,0.85);txt(s1,bx+bw+6,by+bh/2+4,`${b.val.toFixed(0)} kW`,{fill:b.color,'font-size':'10'});
-    txt(s1,6,by+bh/2+4,b.label,{fill:'#3d5268','font-size':'8'});});
+    txt(s1,6,by+bh/2+4,b.label,{fill:'#6b86a0','font-size':'8'});});
   txt(s1,W/2,H-6,`η_comb = ${(c.eta_c*100).toFixed(1)}%  |  HCl: ${c.hcl_risk}  |  Slag: ${c.slag_risk}`,{fill:'#00e5ff','font-size':'9','text-anchor':'middle'});
   // Flame profile
   const s2=clearSvg('svg-comb-flame');gridLines(s2,500,280);
-  txt(s2,8,16,'FLAME TEMPERATURE PROFILE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'FLAME TEMPERATURE PROFILE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const pl=45,pt=25,pw=440,ph=230;
   const zones=['Ignition','Primary flame','Secondary','Burnout','Flue gas'];
   const Ts=[P.T_air,P.T_air+(c.T_flame-P.T_air)*0.7,c.T_flame,c.T_flame*0.75,c.T_fg];
@@ -2022,11 +2093,11 @@ function drawCombustion(c){
   Ts.forEach((T,i)=>{
     s2.appendChild(svgEl('circle',{cx:tx2(i),cy:ty2(T),r:'4',fill:'#ff7043'}));
     txt(s2,tx2(i),ty2(T)-8,`${T.toFixed(0)}°C`,{fill:'#ffea00','font-size':'9','text-anchor':'middle'});
-    txt(s2,tx2(i),pt+ph+14,zones[i],{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    txt(s2,tx2(i),pt+ph+14,zones[i],{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   });
   // μ(W) distribution
   const s3=clearSvg('svg-comb-mu');gridLines(s3,500,280);
-  txt(s3,8,16,'μ(W) DISTRIBUTION — COMBUSTION ZONE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'μ(W) DISTRIBUTION — COMBUSTION ZONE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const mu_pl=45,mu_pt=25,mu_pw=440,mu_ph=220;
   const Tx_min=100,Tx_max=c.T_flame+200,mu_tx=T=>mu_pl+(T-Tx_min)/(Tx_max-Tx_min)*mu_pw;
   const gauss=(T,mu,sig)=>Math.exp(-0.5*((T-mu)/sig)**2);
@@ -2038,7 +2109,7 @@ function drawCombustion(c){
   txt(s3,250,mu_pt+mu_ph+16,`σ_μ = ${c.sig_mu_comb.toFixed(3)}`,{fill:'#ff7043','font-size':'10','text-anchor':'middle','font-weight':'700'});
   // Moisture effect
   const s4=clearSvg('svg-comb-mc');gridLines(s4,500,280,5,4,45,25,10,25);
-  txt(s4,8,16,'MOISTURE CONTENT EFFECT ON EFFICIENCY',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s4,8,16,'MOISTURE CONTENT EFFECT ON EFFICIENCY',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const fd=FUELS[P.fuel],mc_pts=[],lhv_pts=[];
   for(let mc_i=0;mc_i<=40;mc_i+=2){
     const mc_f=mc_i/100,lhv=fd.LHV_dry*(1-mc_f)-2.442*mc_f;
@@ -2055,13 +2126,13 @@ function drawCombustion(c){
   const ox1=45+(fd.mc_opt[0]/40)*440,ox2=45+(fd.mc_opt[1]/40)*440;
   s4.appendChild(svgEl('rect',{x:ox1,y:25,width:ox2-ox1,height:220,fill:'#00e676',opacity:'0.08'}));
   txt(s4,ox1+2,20,'optimal',{fill:'#00e676','font-size':'8'});
-  txt(s4,250,270,'▬ η_comb   ╌ LHV ratio',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  txt(s4,250,270,'▬ η_comb   ╌ LHV ratio',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
 }
 
 // ── DRAW BOILER ──
 function drawBoiler(c,b){
   const s1=clearSvg('svg-boil-heat'),W=500,H=280;
-  txt(s1,8,16,'UPHTT SPIRAL HEAT TRANSFER',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s1,8,16,'UPHTT SPIRAL HEAT TRANSFER',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const cx=250,cy=145,r0=20,dr=12,turns=4;
   for(let t=0;t<turns*Math.PI*2;t+=0.05){
     const r=r0+dr*t/(Math.PI*2),x=cx+r*Math.cos(t),y=cy+r*Math.sin(t)*0.55;
@@ -2071,15 +2142,15 @@ function drawBoiler(c,b){
   }
   txt(s1,cx,cy+10,P.cond_geo==='helical'?'SPIRAL (UPHTT)':'STRAIGHT',{fill:'#00e5ff','font-size':'10','text-anchor':'middle','font-weight':'700'});
   rect(s1,10,220,220,50,'#0d1017',0.9,3);
-  txt(s1,16,235,'η_UPHTT:',{fill:'#3d5268','font-size':'9'});txt(s1,90,235,`${(b.uphtt_eta*100).toFixed(1)}%`,{fill:'#00e5ff','font-size':'12','font-weight':'700'});
-  txt(s1,16,252,'Steam flow:',{fill:'#3d5268','font-size':'9'});txt(s1,100,252,`${(b.m_steam*1000).toFixed(0)} g/s`,{fill:'#ffea00','font-size':'11','font-weight':'700'});
-  txt(s1,16,268,'Q_boiler:',{fill:'#3d5268','font-size':'9'});txt(s1,86,268,`${b.Q_avail.toFixed(0)} kW`,{fill:'#00e676','font-size':'11','font-weight':'700'});
+  txt(s1,16,235,'η_UPHTT:',{fill:'#6b86a0','font-size':'9'});txt(s1,90,235,`${(b.uphtt_eta*100).toFixed(1)}%`,{fill:'#00e5ff','font-size':'12','font-weight':'700'});
+  txt(s1,16,252,'Steam flow:',{fill:'#6b86a0','font-size':'9'});txt(s1,100,252,`${(b.m_steam*1000).toFixed(0)} g/s`,{fill:'#ffea00','font-size':'11','font-weight':'700'});
+  txt(s1,16,268,'Q_boiler:',{fill:'#6b86a0','font-size':'9'});txt(s1,86,268,`${b.Q_avail.toFixed(0)} kW`,{fill:'#00e676','font-size':'11','font-weight':'700'});
   // T-s [FIX v1.4] — Correct Rankine cycle: dome + isobaric phases
   // 4→4a: isobaric heating along liquid saturation line (left side of dome)
   // 4a→1a: HORIZONTAL evaporation at T_boil (constant T, under dome!)
   // 1a→1: isobaric superheating (right of dome, T rises with s)
   const s2=clearSvg('svg-boil-ts');gridLines(s2,500,280);
-  txt(s2,8,16,'STEAM STATE T-s DIAGRAM',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'STEAM STATE T-s DIAGRAM',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const ts_pl=45,ts_pt=20,ts_pw=440,ts_ph=230,sMin=0,sMax=9.5,TMin=0,TMax=520;
   const tsx=s=>ts_pl+(s-sMin)/(sMax-sMin)*ts_pw,tsy=T=>ts_pt+ts_ph-(T-TMin)/(TMax-TMin)*ts_ph;
   // Saturation dome
@@ -2129,22 +2200,22 @@ function drawBoiler(c,b){
     s2.appendChild(svgEl('line',{x1:ts_pl+4,y1:ts_pt+4+i*12,x2:ts_pl+17,y2:ts_pt+4+i*12,stroke:col,'stroke-width':'2'}));
     txt(s2,ts_pl+20,ts_pt+7+i*12,lbl,{fill:col,'font-size':'7'});
   });
-  [0,2,4,6,8].forEach(s=>txt(s2,tsx(s),ts_pt+ts_ph+14,s,{fill:'#3d5268','font-size':'8','text-anchor':'middle'}));
-  txt(s2,ts_pl+ts_pw/2,ts_pt+ts_ph+24,'s [kJ/kgK]',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  [0,100,200,300,400,500].forEach(T=>txt(s2,ts_pl-5,tsy(T)+3,T,{fill:'#3d5268','font-size':'8','text-anchor':'end'}));
+  [0,2,4,6,8].forEach(s=>txt(s2,tsx(s),ts_pt+ts_ph+14,s,{fill:'#6b86a0','font-size':'8','text-anchor':'middle'}));
+  txt(s2,ts_pl+ts_pw/2,ts_pt+ts_ph+24,'s [kJ/kgK]',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  [0,100,200,300,400,500].forEach(T=>txt(s2,ts_pl-5,tsy(T)+3,T,{fill:'#6b86a0','font-size':'8','text-anchor':'end'}));
   // UPHTT κ(μ)
   const s3=clearSvg('svg-boil-uphtt');gridLines(s3,500,280);
-  txt(s3,8,16,'UPHTT κ(μ) — PHOTON-COUPLING CURVE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'UPHTT κ(μ) — PHOTON-COUPLING CURVE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const kp_pts=[];for(let si=0;si<=100;si++){const frac=si/100,sig_l=b.sig_mu_boil+0.15*Math.sin(frac*Math.PI),kappa=1/(sig_l+0.005);kp_pts.push({x:45+frac*440,y:20+230-Math.min(kappa/15,1)*230});}
   const kp_lp=mkPath(kp_pts,{stroke:'#00e5ff','stroke-width':'2'});if(kp_lp)s3.appendChild(kp_lp);
   ['Feed water','Preheating','Boiling','Superheating'].forEach((sec,i)=>{
     const x=45+i*440/4+55;s3.appendChild(svgEl('line',{x1:45+i*440/4,y1:20,x2:45+i*440/4,y2:250,stroke:'#1c2535','stroke-width':'1','stroke-dasharray':'3,3'}));
-    txt(s3,x,264,sec,{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+    txt(s3,x,264,sec,{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   });
   txt(s3,250,280,`σ_μ_boiler = ${b.sig_mu_boil.toFixed(4)}`,{fill:'#00e5ff','font-size':'9','text-anchor':'middle'});
   // Saturation curve
   const s4=clearSvg('svg-boil-psat');gridLines(s4,500,280);
-  txt(s4,8,16,'STEAM PRESSURE — SATURATION CURVE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s4,8,16,'STEAM PRESSURE — SATURATION CURVE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   // ── SATURATION CURVE [FIX v1.7] ──
   // v1.6 drew this with the Magnus/Tetens formula
   //     P = 0.006112·exp(17.67·T/(T+243.5))·10
@@ -2174,17 +2245,17 @@ function drawBoiler(c,b){
   s4.appendChild(svgEl('circle',{cx:px_cur,cy:py_cur,r:'5',fill:'#ffea00',stroke:'#fff','stroke-width':'1'}));
   const flip=px_cur>330;
   txt(s4,px_cur+(flip?-7:7),py_cur-4,`${P.T_boil}°C / ${P_sat_cur.toFixed(1)} bar`,{fill:'#ffea00','font-size':'9','text-anchor':flip?'end':'start'});
-  [0,50,100,150,200].forEach(Pb=>txt(s4,41,psy(Pb)+3,Pb,{fill:'#3d5268','font-size':'7','text-anchor':'end'}));
-  txt(s4,14,135,'P [bar]',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  [0,100,200,300].forEach(T=>txt(s4,psx(T),262,T,{fill:'#3d5268','font-size':'7','text-anchor':'middle'}));
-  txt(s4,250,274,'Temperature [°C] — Wagner equation [PROVEN]',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  [0,50,100,150,200].forEach(Pb=>txt(s4,41,psy(Pb)+3,Pb,{fill:'#6b86a0','font-size':'7','text-anchor':'end'}));
+  txt(s4,14,135,'P [bar]',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  [0,100,200,300].forEach(T=>txt(s4,psx(T),262,T,{fill:'#6b86a0','font-size':'7','text-anchor':'middle'}));
+  txt(s4,250,274,'Temperature [°C] — Wagner equation [PROVEN]',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
 }
 
 // ── DRAW TURBINE ──
 function drawTurbine(t){
   const sat_b=satProps(P.T_boil),sat_c=satProps(P.T_cond);
   const s1=clearSvg('svg-turb-ts');gridLines(s1,400,280);
-  txt(s1,8,16,'T-s DIAGRAM (IAPWS-IF97)',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s1,8,16,'T-s DIAGRAM (IAPWS-IF97)',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const pl=45,pt=20,pw=340,ph=235,sMin=0.5,sMax=9.2,TMin=P.T_cond-10,TMax=P.T_sh+50;
   const tsx=s=>pl+(s-sMin)/(sMax-sMin)*pw,tsy=T=>pt+ph-(T-TMin)/(TMax-TMin)*ph;
   const sL=[],sV=[];SAT.forEach(r=>{sL.push({x:tsx(r[3]),y:tsy(r[0])});sV.push({x:tsx(r[4]),y:tsy(r[0])});});
@@ -2221,8 +2292,8 @@ function drawTurbine(t){
     s1.appendChild(svgEl('circle',{cx:tsx(sp.s),cy:tsy(sp.T),r:'3.5',fill:sp.col,stroke:'#07090f','stroke-width':'1'}));
     txt(s1,tsx(sp.s)+5,tsy(sp.T)-4,sp.lbl,{fill:sp.col,'font-size':'8'});
   });
-  txt(s1,pl+pw/2,pt+ph+14,'s [kJ/kgK]',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  [100,200,300,400].forEach(T=>{if(T>=TMin&&T<=TMax)txt(s1,pl-4,tsy(T)+3,T,{fill:'#3d5268','font-size':'8','text-anchor':'end'});});
+  txt(s1,pl+pw/2,pt+ph+14,'s [kJ/kgK]',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  [100,200,300,400].forEach(T=>{if(T>=TMin&&T<=TMax)txt(s1,pl-4,tsy(T)+3,T,{fill:'#6b86a0','font-size':'8','text-anchor':'end'});});
   txt(s1,pl+pw-5,pt+10,`η_cl=${(t.eta_cl*100).toFixed(1)}%`,{fill:'#00e5ff','font-size':'8','text-anchor':'end'});
   txt(s1,pl+pw-5,pt+22,`η_TMF=${(t.eta_tmf*100).toFixed(1)}%`,{fill:'#00e676','font-size':'8','text-anchor':'end'});
   // [v1.7] the cycle finally has pressures, so show them
@@ -2232,7 +2303,7 @@ function drawTurbine(t){
   txt(s1,pl+pw-5,pt+57,`η_CA(T̄)=${(t.eta_ca_mean*100).toFixed(1)}%  (max power)`,{fill:'#ffc400','font-size':'7','text-anchor':'end'});
   // μ(W)
   const s2=clearSvg('svg-turb-mu');gridLines(s2,400,280);
-  txt(s2,8,16,'μ(W) DISTRIBUTION',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'μ(W) DISTRIBUTION',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   ['Turbine inlet','Expansion','Condenser'].forEach((step,si)=>{
     const mu=P.T_cond+(P.T_sh-P.T_cond)*(1-si*0.45),sig=[t.sig_mu*100,t.sig_mu*170,t.sig_mu*80][si];
     const col=['#00e5ff','#ffea00','#00e676'][si],ppts=[];
@@ -2243,7 +2314,7 @@ function drawTurbine(t){
   txt(s2,200,264,`σ_μ = ${t.sig_mu.toFixed(4)}  κ = ${t.kappa.toFixed(2)}`,{fill:'#00e5ff','font-size':'9','text-anchor':'middle'});
   // κ(μ)
   const s3=clearSvg('svg-turb-kap');gridLines(s3,400,280);
-  txt(s3,8,16,'κ(μ) — ENTROPY BIRTH LOCUS',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'κ(μ) — ENTROPY BIRTH LOCUS',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   // [FIX v1.7] This panel used to draw a hard-coded shape — the array
   // [0.8,3.5,1.2,0.6] and a sine bump — that never changed with any slider.
   // rankineCycle() now returns the actual κ per station, so plot those.
@@ -2262,18 +2333,18 @@ function drawTurbine(t){
     s3.appendChild(svgEl('circle',{cx:kx(i),cy:ky(v),r:isDrive?'5':'3.5',
       fill:isDrive?'#00e5ff':'#d500f9',stroke:'#07090f','stroke-width':'1'}));
     txt(s3,kx(i),ky(v)-8,v.toFixed(3),{fill:isDrive?'#00e5ff':'#d500f9','font-size':'8','text-anchor':'middle','font-weight':'700'});
-    txt(s3,kx(i),262,kNames[i],{fill:isDrive?'#00e5ff':'#3d5268','font-size':'7','text-anchor':'middle'});
+    txt(s3,kx(i),262,kNames[i],{fill:isDrive?'#00e5ff':'#6b86a0','font-size':'7','text-anchor':'middle'});
   });
-  txt(s3,200,275,`κ_drive = κ_turb = ${t.kap_turb.toFixed(3)}  ·  κ_peak = ${t.kap_peak.toFixed(3)} (boiler)`,{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+  txt(s3,200,275,`κ_drive = κ_turb = ${t.kap_turb.toFixed(3)}  ·  κ_peak = ${t.kap_peak.toFixed(3)} (boiler)`,{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   // Inlet decomposition
   const s4=clearSvg('svg-turb-inlet');
-  txt(s4,8,16,'TURBINE INLET STATE DECOMPOSITION — σ_T · σ_ρ · σ_v',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s4,8,16,'TURBINE INLET STATE DECOMPOSITION — σ_T · σ_ρ · σ_v',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   [{lbl:'σ_T (temperature inhomogeneity)',val:P.sig_T,col:'#ff7043'},{lbl:'σ_ρ (density inhomogeneity)',val:P.sig_rho,col:'#00e5ff'},
    {lbl:'σ_v (velocity profile)',val:P.sig_v,col:'#00e676'},{lbl:'σ_μ (total)',val:t.sig_mu,col:'#d500f9'}].forEach((c,i)=>{
     const bw=Math.max(5,(c.val/0.4)*700),by=30+i*50;
     rect(s4,50,by,bw,38,c.col,0.75);
     txt(s4,50+bw+8,by+23,`${(c.val*100).toFixed(1)}%`,{fill:c.col,'font-size':'11','font-weight':'700'});
-    txt(s4,6,by+23,c.lbl,{fill:'#3d5268','font-size':'9'});
+    txt(s4,6,by+23,c.lbl,{fill:'#6b86a0','font-size':'9'});
     // [FIX v1.7] was 0.15·σ²·100, which belonged to the old subtractive model
     // and ignored both κ and η_classic. Now the actual pp contribution.
     txt(s4,794,by+23,`−${(0.15*c.val**2*t.kap_turb*t.eta_cl*100).toFixed(3)} pp`,{fill:c.col,'font-size':'9','text-anchor':'end'});
@@ -2281,7 +2352,7 @@ function drawTurbine(t){
   txt(s4,400,240,`Δη_TMF = −${(t.delta_eta*100).toFixed(2)}%  |  η_classic: ${(t.eta_cl*100).toFixed(1)}%  |  η_TMF: ${(t.eta_tmf*100).toFixed(1)}%`,{fill:'#00e5ff','font-size':'9','text-anchor':'middle'});
   // η vs σ_μ
   const s5=clearSvg('svg-turb-eta');gridLines(s5,400,260);
-  txt(s5,8,16,'η vs σ_μ EFFICIENCY LOSS',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s5,8,16,'η vs σ_μ EFFICIENCY LOSS',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   // [FIX v1.7] Two problems: the curve still used the old subtractive Δη
   // formula, and it was plotted on a 0…100% axis where a few-percent effect is
   // ~2 px tall — the panel looked like a horizontal line whatever you did.
@@ -2296,17 +2367,17 @@ function drawTurbine(t){
   const eY=v=>20+210-((v-eMin)/(eMax-eMin))*210;
   const e_pts=eVals.map((v,si)=>({x:40+si*340/50,y:eY(v)}));
   const elp=mkPath(e_pts,{stroke:'#00e676','stroke-width':'2'});if(elp)s5.appendChild(elp);
-  [eMin,(eMin+eMax)/2,eMax].forEach(v=>txt(s5,36,eY(v)+3,`${(v*100).toFixed(1)}%`,{fill:'#3d5268','font-size':'7','text-anchor':'end'}));
+  [eMin,(eMin+eMax)/2,eMax].forEach(v=>txt(s5,36,eY(v)+3,`${(v*100).toFixed(1)}%`,{fill:'#6b86a0','font-size':'7','text-anchor':'end'}));
   const cur_sx=40+(t.sig_mu/0.5)*340,cur_sy=eY(t.eta_tmf);
   s5.appendChild(svgEl('circle',{cx:cur_sx,cy:cur_sy,r:'5',fill:'#00e5ff',stroke:'#fff','stroke-width':'1.5'}));
   txt(s5,cur_sx+7,cur_sy-3,`η=${(t.eta_tmf*100).toFixed(1)}%`,{fill:'#00e5ff','font-size':'9'});
-  txt(s5,210,248,'σ_μ',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  txt(s5,210,248,'σ_μ',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
 }
 
 // ── DRAW GENERATOR ──
 function drawGenerator(g){
   const s1=clearSvg('svg-gen-eta'),W=500,H=280;
-  txt(s1,8,16,'GENERATOR EFFICIENCY PIE CHART',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s1,8,16,'GENERATOR EFFICIENCY PIE CHART',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const cx=160,cy=145,R=100;
   const losses=[{lbl:`Cu loss: ${g.P_Cu.toFixed(1)} kW`,val:g.P_Cu,col:'#ff7043'},{lbl:`Fe loss: ${g.P_Fe.toFixed(1)} kW`,val:g.P_Fe,col:'#ffea00'},
     {lbl:`Mech.: ${g.P_mech.toFixed(1)} kW`,val:g.P_mech,col:'#d500f9'},{lbl:`Stray: ${g.P_stray.toFixed(1)} kW`,val:g.P_stray,col:'#ff1744'},
@@ -2322,17 +2393,17 @@ function drawGenerator(g){
   txt(s1,cx,cy+5,`η=${(g.eta_gen*100).toFixed(1)}%`,{fill:'#fff','font-size':'11','font-weight':'700','text-anchor':'middle'});
   // Losses bar
   const s2=clearSvg('svg-gen-loss');gridLines(s2,500,280);
-  txt(s2,8,16,'LOSS BREAKDOWN',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'LOSS BREAKDOWN',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   [{lbl:'Cu (I²R)',val:g.P_Cu,col:'#ff7043'},{lbl:'Fe (Steinmetz)',val:g.P_Fe,col:'#ffea00'},{lbl:'Mech.',val:g.P_mech,col:'#d500f9'},{lbl:'Stray',val:g.P_stray,col:'#ff1744'}].forEach((l,i)=>{
     const bw=Math.max(5,(l.val/Math.max(...[g.P_Cu,g.P_Fe,g.P_mech,g.P_stray])*1.2))*390,by=30+i*50;
     rect(s2,80,by,bw,38,l.col,0.8);txt(s2,80+bw+6,by+23,`${l.val.toFixed(1)} kW`,{fill:l.col,'font-size':'10','font-weight':'700'});
-    txt(s2,6,by+23,l.lbl,{fill:'#3d5268','font-size':'9'});
+    txt(s2,6,by+23,l.lbl,{fill:'#6b86a0','font-size':'9'});
   });
   rect(s2,0,H-30,W,28,'#0d1017',0.95,0);
   txt(s2,W/2,H-16,`Total loss: ${g.P_loss_total.toFixed(1)} kW  |  Electric output: ${g.P_elec.toFixed(1)} kW`,{fill:'#00e5ff','font-size':'9','text-anchor':'middle'});
   // Load characteristic
   const s3=clearSvg('svg-gen-char');gridLines(s3,500,280);
-  txt(s3,8,16,'P-η LOAD CHARACTERISTIC',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'P-η LOAD CHARACTERISTIC',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const ch_pts=g.loads.map((lf,i)=>({x:45+lf*440,y:20+230-g.eta_load[i]*230}));
   const ch_area=ch_pts.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')+` L${ch_pts[ch_pts.length-1].x},${250} L${ch_pts[0].x},${250} Z`;
   s3.appendChild(svgEl('path',{d:ch_area,fill:'#00e676',opacity:'0.1'}));
@@ -2340,10 +2411,10 @@ function drawGenerator(g){
   const cur_lf=g.P_elec/P.P_nom_kw,cur_x=45+cur_lf*440,cur_eta_i=Math.min(Math.round(cur_lf*9),9),cur_y=20+230-g.eta_load[cur_eta_i]*230;
   s3.appendChild(svgEl('circle',{cx:cur_x,cy:cur_y,r:'5',fill:'#ffea00',stroke:'#fff','stroke-width':'1.5'}));
   txt(s3,cur_x+7,cur_y-3,`${(g.eta_load[cur_eta_i]*100).toFixed(1)}%`,{fill:'#ffea00','font-size':'9'});
-  txt(s3,250,268,'Load factor [%]',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  txt(s3,250,268,'Load factor [%]',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   // Frequency
   const s4=clearSvg('svg-gen-freq');gridLines(s4,500,280);
-  txt(s4,8,16,'FREQUENCY &amp; VOLTAGE STABILITY',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s4,8,16,'FREQUENCY &amp; VOLTAGE STABILITY',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const f_pts=[0.2,0.4,0.6,0.8,1.0,1.1].map(lf=>({x:45+((lf-0.2)/0.9)*440,y:20+230-((50*(1-0.05*(lf-1))-47.5)/5)*230}));
   const flp=mkPath(f_pts,{stroke:'#00e5ff','stroke-width':'2'});if(flp)s4.appendChild(flp);
   txt(s4,440,20,'─── f [Hz]',{fill:'#00e5ff','font-size':'8','text-anchor':'end'});
@@ -2353,7 +2424,7 @@ function drawGenerator(g){
 // ── DRAW SYSTEM ──
 function drawSystem(c,b,t,g){
   const s1=clearSvg('svg-sys-sankey'),W=1000,H=160;
-  txt(s1,8,14,'ENERGY SANKEY — FULL CHAIN',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s1,8,14,'ENERGY SANKEY — FULL CHAIN',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const stages=[{lbl:'Fuel input',val:c.Q_in,col:'#ff7043'},{lbl:'Combustion out',val:c.Q_useful,col:'#ffea00'},
     {lbl:'Boiler out',val:b.Q_avail,col:'#00e5ff'},{lbl:'Turbine',val:t.W_mech,col:'#00e676'},{lbl:'Electric',val:g.P_elec,col:'#d500f9'}];
   const maxV=stages[0].val,bh_max=90;
@@ -2364,23 +2435,23 @@ function drawSystem(c,b,t,g){
     if(i>0)txt(s1,bx-5,H-10,`−${(stages[i-1].val-st.val).toFixed(0)} kW`,{fill:'#ff1744','font-size':'8','text-anchor':'middle'});
   });
   const s2=clearSvg('svg-sys-cascade');gridLines(s2,500,280);
-  txt(s2,8,16,'CASCADE EFFICIENCY',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'CASCADE EFFICIENCY',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   [{lbl:'η_combustion',val:c.eta_c,col:'#ff7043'},{lbl:'η_boiler',val:P.eta_boil,col:'#ffea00'},
    {lbl:'η_turbine',val:t.eta_tmf,col:'#00e5ff'},{lbl:'η_generator',val:g.eta_gen,col:'#00e676'},
    {lbl:'η_TOTAL',val:PIPE.eta_total,col:'#d500f9'}].forEach((e,i)=>{
     const by=30+i*52,bw=Math.max(4,e.val*380);
     rect(s2,60,by,bw,40,e.col,0.8);
     txt(s2,60+bw+8,by+24,`${(e.val*100).toFixed(1)}%`,{fill:e.col,'font-size':'11','font-weight':'700'});
-    txt(s2,6,by+24,e.lbl,{fill:'#3d5268','font-size':'9'});
+    txt(s2,6,by+24,e.lbl,{fill:'#6b86a0','font-size':'9'});
   });
   const s3=clearSvg('svg-sys-eroi');gridLines(s3,500,280);
-  txt(s3,8,16,'EROI AND TMF σ_μ RELATIONSHIP',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'EROI AND TMF σ_μ RELATIONSHIP',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const e_pts=[];for(let si=0;si<=50;si++){const s=si*0.01;e_pts.push({x:45+si*440/50,y:20+220-Math.max(0,PIPE.EROI*(1-2*s)/20)*220});}
   const eroi_lp=mkPath(e_pts,{stroke:'#d500f9','stroke-width':'2'});if(eroi_lp)s3.appendChild(eroi_lp);
   const cur_ex=45+(t.sig_mu/0.5)*440,cur_ey=20+220-Math.max(0,PIPE.EROI/20)*220;
   s3.appendChild(svgEl('circle',{cx:cur_ex,cy:cur_ey,r:'6',fill:'#d500f9',stroke:'#fff','stroke-width':'1.5'}));
   txt(s3,cur_ex+8,cur_ey-4,`EROI=${PIPE.EROI.toFixed(1)}`,{fill:'#d500f9','font-size':'9','font-weight':'700'});
-  txt(s3,250,268,'σ_μ (total inhomogeneity)',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  txt(s3,250,268,'σ_μ (total inhomogeneity)',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   rect(s3,45,250,440,28,'#0d1017',0.9,3);
   txt(s3,50,268,`η_total: ${(PIPE.eta_total*100).toFixed(1)}%  EROI: ${PIPE.EROI.toFixed(1)}  W_el: ${PIPE.P_elec.toFixed(0)} kW  σ_μ: ${t.sig_mu.toFixed(3)}`,{fill:'#00e5ff','font-size':'9','font-weight':'700'});
 }
@@ -2392,23 +2463,23 @@ function drawImpedance(c, b, imp){
 
   // ── PANEL 1: the real circuit, its flux split, and its speeds ──
   const s1=clearSvg('svg-imp-breakdown');
-  txt(s1,8,13,'HEAT-TRANSFER CIRCUIT — RESISTANCE, FLUX SHARE, RESPONSE TIME',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.08em'});
+  txt(s1,8,13,'HEAT-TRANSFER CIRCUIT — RESISTANCE, FLUX SHARE, RESPONSE TIME',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.08em'});
   // circuit sketch: two parallel routes then the wall
   const cx0=30, cy0=44, lw=150;
-  txt(s1,cx0-14,cy0+16,'gas',{fill:'#3d5268','font-size':'7','text-anchor':'end'});
-  s1.appendChild(svgEl('line',{x1:cx0,y1:cy0+13,x2:cx0+18,y2:cy0+13,stroke:'#3d5268','stroke-width':'1'}));
+  txt(s1,cx0-14,cy0+16,'gas',{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
+  s1.appendChild(svgEl('line',{x1:cx0,y1:cy0+13,x2:cx0+18,y2:cy0+13,stroke:'#6b86a0','stroke-width':'1'}));
   [['Radiation',imp.flux_rad,'#ff7043',0],['Convection',imp.flux_conv,'#00e5ff',26]].forEach(function(r){
     const y=cy0+r[3];
     rect(s1,cx0+18,y,lw,20,r[2],0.20,2);
     s1.appendChild(svgEl('rect',{x:cx0+18,y:y,width:lw,height:20,fill:'none',stroke:r[2],'stroke-width':'1.1',rx:'2'}));
     txt(s1,cx0+18+lw/2,y+13,r[0]+'  '+(r[1]*100).toFixed(0)+'% of flux',{fill:r[2],'font-size':'7.5','text-anchor':'middle','font-weight':'700'});
   });
-  s1.appendChild(svgEl('line',{x1:cx0+18+lw,y1:cy0+13,x2:cx0+18+lw+16,y2:cy0+13,stroke:'#3d5268','stroke-width':'1'}));
+  s1.appendChild(svgEl('line',{x1:cx0+18+lw,y1:cy0+13,x2:cx0+18+lw+16,y2:cy0+13,stroke:'#6b86a0','stroke-width':'1'}));
   rect(s1,cx0+18+lw+16,cy0+3,96,20,'#00e676',0.20,2);
   s1.appendChild(svgEl('rect',{x:cx0+18+lw+16,y:cy0+3,width:96,height:20,fill:'none',stroke:'#00e676','stroke-width':'1.1',rx:'2'}));
   txt(s1,cx0+18+lw+64,cy0+16,'Wall',{fill:'#00e676','font-size':'7.5','text-anchor':'middle','font-weight':'700'});
-  txt(s1,cx0+18+lw+118,cy0+16,'steam',{fill:'#3d5268','font-size':'7'});
-  txt(s1,cx0+18+lw/2,cy0+62,'parallel — both routes carry heat at once',{fill:'#3d5268','font-size':'6.5','text-anchor':'middle'});
+  txt(s1,cx0+18+lw+118,cy0+16,'steam',{fill:'#6b86a0','font-size':'7'});
+  txt(s1,cx0+18+lw/2,cy0+62,'parallel — both routes carry heat at once',{fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
 
   // table: Z, h, flux share, tau
   const rows=[
@@ -2418,7 +2489,7 @@ function drawImpedance(c, b, imp){
   ];
   const hy=134;
   ['','Z [m²K/W]','h [W/m²K]','flux','τ response'].forEach(function(t,i){
-    txt(s1,[14,150,238,318,412][i],hy,t,{fill:'#3d5268','font-size':'6.5','letter-spacing':'.1em'});
+    txt(s1,[14,150,238,318,412][i],hy,t,{fill:'#6b86a0','font-size':'6.5','letter-spacing':'.1em'});
   });
   rows.forEach(function(r,i){
     const y=hy+16+i*17;
@@ -2437,14 +2508,14 @@ function drawImpedance(c, b, imp){
     txt(s1,14,hy+128,'⚠ '+(imp.q_flux/1000).toFixed(0)+' kW/m² is far above a real furnace (100–300). h_straight = 1500 W/m²K looks like a',{fill:'#ff1744','font-size':'6.5'});
     txt(s1,14,hy+138,'WATER-side coefficient applied to the GAS side; a furnace gas film is nearer 30–80. Flagged, not silently changed.',{fill:'#ff1744','font-size':'6.5'});
   }
-  txt(s1,14,hy+83,'Energy does not choose a route — it takes both, split by conductance. The slow one sets the',{fill:'#3d5268','font-size':'6.5'});
-  txt(s1,14,hy+93,'thermal response: radiative loading needs '+imp.tau_rad.toFixed(0)+' s to move the wall, convective '+imp.tau_conv.toFixed(0)+' s, the wall itself '+imp.tau_cond.toFixed(1)+' s.',{fill:'#3d5268','font-size':'6.5'});
+  txt(s1,14,hy+83,'Energy does not choose a route — it takes both, split by conductance. The slow one sets the',{fill:'#6b86a0','font-size':'6.5'});
+  txt(s1,14,hy+93,'thermal response: radiative loading needs '+imp.tau_rad.toFixed(0)+' s to move the wall, convective '+imp.tau_conv.toFixed(0)+' s, the wall itself '+imp.tau_cond.toFixed(1)+' s.',{fill:'#6b86a0','font-size':'6.5'});
   txt(s1,14,hy+106,'⚠ [FIX v2.2] Earlier versions summed all three in series: Z = '+imp.Z_series_legacy.toExponential(2)+', 6.4× too high, and',{fill:'#ff1744','font-size':'6.5'});
   txt(s1,14,hy+116,'reported "dominant: Z_rad 82%". With the correct circuit convection carries most of the flux. See audit §2.6.',{fill:'#ff1744','font-size':'6.5'});
 
   // ── PANEL 2: Geometric scaling — Leonardo vs Murray ──
   const s2=clearSvg('svg-imp-scaling');
-  txt(s2,8,16,'GEOMETRIC SCALING LAW — IMPEDANCE MATCHING',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s2,8,16,'GEOMETRIC SCALING LAW — IMPEDANCE MATCHING',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   const pl=50,pt=30,pw=420,ph=200;
   gridLines(s2,W,H,5,4,pl,pt,10,50);
   // Curves: ideal branch diameter vs N_branches for Leonardo and Murray
@@ -2472,16 +2543,16 @@ function drawImpedance(c, b, imp){
   txt(s2,pl+pw-5,cur_y_leo-4,'Leonardo d²',{fill:'#ffea00','font-size':'8','text-anchor':'end'});
   txt(s2,pl+pw-5,cur_y_mur+12,'Murray d³',{fill:orange,'font-size':'8','text-anchor':'end'});
   // Axis labels
-  for(let n=1;n<=10;n++) txt(s2,pl+(n-1)*pw/9,pt+ph+14,n,{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  txt(s2,pl+pw/2,pt+ph+28,'Number of branches (N)',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  txt(s2,8,pt+ph/2,'d_branch',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  for(let n=1;n<=10;n++) txt(s2,pl+(n-1)*pw/9,pt+ph+14,n,{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  txt(s2,pl+pw/2,pt+ph+28,'Number of branches (N)',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  txt(s2,8,pt+ph/2,'d_branch',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   // Node status badge
   const ns_col=imp.node_status==='OK'?'#00e676':imp.node_status==='WARN'?'#ffea00':'#ff1744';
   txt(s2,W/2,H-6,`Node count: N=${N} — ${imp.node_status}  |  Scaling: ${imp.scaling.toUpperCase()}`,{fill:ns_col,'font-size':'9','text-anchor':'middle','font-weight':'700'});
 
   // ── PANEL 3: Mismatch penalty curve ──
   const s3=clearSvg('svg-imp-penalty');
-  txt(s3,8,16,'IMPEDANCE MISMATCH PENALTY — η_entr = e^{−λ·ΔS}',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s3,8,16,'IMPEDANCE MISMATCH PENALTY — η_entr = e^{−λ·ΔS}',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   gridLines(s3,W,H,5,4,pl,pt,10,50);
   const pen_pts=[];
   for(let mi=0;mi<=50;mi++){
@@ -2505,17 +2576,17 @@ function drawImpedance(c, b, imp){
   [0.9,0.8,0.7].forEach((v,i)=>{
     const py=pt+ph-v*ph;
     s3.appendChild(svgEl('line',{x1:pl,y1:py,x2:pl+pw,y2:py,stroke:'#1c2535','stroke-width':'1','stroke-dasharray':'2,4'}));
-    txt(s3,pl-4,py+3,`${(v*100).toFixed(0)}%`,{fill:'#3d5268','font-size':'8','text-anchor':'end'});
+    txt(s3,pl-4,py+3,`${(v*100).toFixed(0)}%`,{fill:'#6b86a0','font-size':'8','text-anchor':'end'});
   });
-  for(let mi=0;mi<=5;mi++) txt(s3,pl+mi*pw/5,pt+ph+14,`${(mi*20).toFixed(0)}%`,{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-  txt(s3,pl+pw/2,pt+ph+28,'Geometric mismatch (%)',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+  for(let mi=0;mi<=5;mi++) txt(s3,pl+mi*pw/5,pt+ph+14,`${(mi*20).toFixed(0)}%`,{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+  txt(s3,pl+pw/2,pt+ph+28,'Geometric mismatch (%)',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   // Thermoacoustic risk
   const ta_col=imp.thermo_acoustic==='LOW'?'#00e676':imp.thermo_acoustic==='MEDIUM'?'#ffea00':'#ff1744';
   txt(s3,W/2,H-6,`Mismatch: ${(imp.mismatch*100).toFixed(1)}%  |  R_acoustic: ${imp.R_refl.toFixed(3)}  |  lock ${imp.lock_p}:${imp.lock_q} = ${(imp.lock*100).toFixed(0)}%  |  RI: ${imp.rayleigh_index.toFixed(3)} — ${imp.thermo_acoustic}`,{fill:ta_col,'font-size':'8','text-anchor':'middle','font-weight':'700'});
 
   // ── PANEL 4: Network topology — node diagram & taper ──
   const s4=clearSvg('svg-imp-network');
-  txt(s4,8,16,'NETWORK TOPOLOGY — NODE MAP & TAPER PROFILE',{fill:'#3d5268','font-size':'8','letter-spacing':'.14em'});
+  txt(s4,8,16,'NETWORK TOPOLOGY — NODE MAP & TAPER PROFILE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.14em'});
   // Draw tree: main header → N branches with taper
   const root_x=60, root_y=H/2, trunk_w=imp.d0*800;
   // Main trunk
@@ -2543,18 +2614,18 @@ function drawImpedance(c, b, imp){
   for(let i=0;i<N2;i++){
     const by=root_y-y_spread/2+i*pitch;
     // Connecting line
-    s4.appendChild(svgEl('line',{x1:root_x+110,y1:root_y,x2:185,y2:by,stroke:'#3d5268','stroke-width':'1'}));
+    s4.appendChild(svgEl('line',{x1:root_x+110,y1:root_y,x2:185,y2:by,stroke:'#6b86a0','stroke-width':'1'}));
     // Ideal branch (ghost)
     rect(s4,185,by-draw_wi/2,110,draw_wi,'#00e676',0.35,1);
     // Actual branch
     rect(s4,185,by-draw_w/2,110,draw_w,bcol,0.8,1);
     // Index tick — replaces the old per-branch label, which repeated the same
     // number N times and overlapped itself above N≈7
-    txt(s4,301,by+3,String(i+1),{fill:'#3d5268','font-size':'6'});
+    txt(s4,301,by+3,String(i+1),{fill:'#6b86a0','font-size':'6'});
   }
   // Single diameter readout for the whole bundle
   txt(s4,315,root_y-4,`d_i = ${(imp.d_branch_actual*1000).toFixed(1)} mm`,{fill:bcol,'font-size':'8','font-weight':'700'});
-  txt(s4,315,root_y+8,`ideal ${(imp.d_branch_ideal*1000).toFixed(1)} mm · ×${N2}`,{fill:'#3d5268','font-size':'7'});
+  txt(s4,315,root_y+8,`ideal ${(imp.d_branch_ideal*1000).toFixed(1)} mm · ×${N2}`,{fill:'#6b86a0','font-size':'7'});
   // Legend
   txt(s4,190,H-28,'■ Actual',{fill:bcol,'font-size':'8'});
   txt(s4,260,H-28,'■ Ideal (matched)',{fill:'#00e676','font-size':'8'});
@@ -2568,7 +2639,8 @@ function drawImpedance(c, b, imp){
     ww.setAttribute('fill','rgba(255,23,68,0.15)');ww.setAttribute('rx','2');s4.appendChild(ww);
     txt(s4,W/2,H-9,`⛔ Junction catastrophe risk: N=${imp.N_branches} branches exceed safe node limit (≤5)`,{fill:'#ff1744','font-size':'8','text-anchor':'middle','font-weight':'700'});
   }
-  txt(s4,W/2,18,`η_imp = ${(imp.eta_imp*100).toFixed(2)}%  |  η_entr = ${(imp.eta_entr*100).toFixed(2)}%  |  η_taper = ${(imp.eta_taper*100).toFixed(0)}%`,{fill:orange,'font-size':'9','text-anchor':'middle','font-weight':'700'});
+  // [v2.2.1] was y=18, which sat on top of the panel header at y=16. Moved clear.
+  txt(s4,W/2,38,`η_imp = ${(imp.eta_imp*100).toFixed(2)}%  |  η_entr = ${(imp.eta_entr*100).toFixed(2)}%  |  η_taper = ${(imp.eta_taper*100).toFixed(0)}%`,{fill:orange,'font-size':'9','text-anchor':'middle','font-weight':'700'});
 }
 
 
@@ -2581,14 +2653,14 @@ function drawSensitivity(comb,boil,turb,gen){
 
   // ── PANEL 1: every lever ranked by ΔP_elec ──
   const s1=clearSvg('svg-sens-bars');
-  txt(s1,8,14,'MARGINAL GAIN — ΔP_elec PER STEP, RANKED',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+  txt(s1,8,14,'MARGINAL GAIN — ΔP_elec PER STEP, RANKED',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
   const ranked=S.items.slice().filter(i=>i.ok).sort((a,b)=>Math.abs(b.dP)-Math.abs(a.dP));
   const maxAbs=Math.max(0.001,Math.max.apply(null,ranked.map(i=>Math.abs(i.dP))));
   const rowH=Math.min(17,(H-52)/ranked.length), x0=108, barMax=250;
   ranked.forEach((it,i)=>{
     const y=26+i*rowH, bw=Math.max(1,Math.abs(it.dP)/maxAbs*barMax);
     rect(s1,x0,y+1,bw,rowH-4,it.col,it.dP>=0?0.85:0.35,1);
-    txt(s1,x0-4,y+rowH/2+2,it.lbl,{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+    txt(s1,x0-4,y+rowH/2+2,it.lbl,{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
     txt(s1,x0-4,y+rowH/2+2,'',{});
     txt(s1,x0+bw+4,y+rowH/2+2,(it.dP>=0?'+':'')+it.dP.toFixed(2)+' kW',{fill:it.col,'font-size':'7','font-weight':'700'});
     txt(s1,W-6,y+rowH/2+2,it.unit,{fill:'#2a3d54','font-size':'6','text-anchor':'end'});
@@ -2599,12 +2671,12 @@ function drawSensitivity(comb,boil,turb,gen){
   if(dead.length){
     txt(s1,W/2,H-6,'⚠ No response at all from: '+dead.map(function(i){return i.lbl;}).join(', ')+' — see audit §2.6',{fill:'#ff1744','font-size':'6.5','text-anchor':'middle','font-weight':'700'});
   } else {
-    txt(s1,W/2,H-5,'Ranked by thermodynamic payback only — no cost model here, so this is not a cost-effectiveness ranking.',{fill:'#3d5268','font-size':'6.5','text-anchor':'middle'});
+    txt(s1,W/2,H-5,'Ranked by thermodynamic payback only — no cost model here, so this is not a cost-effectiveness ranking.',{fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
   }
 
   // ── PANEL 2: chain transmission ──
   const s2=clearSvg('svg-sens-chain');
-  txt(s2,8,14,'CHAIN TRANSMISSION — FRACTION OF A LOCAL +1 pp REACHING THE TERMINALS',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.10em'});
+  txt(s2,8,14,'CHAIN TRANSMISSION — FRACTION OF A LOCAL +1 pp REACHING THE TERMINALS',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.10em'});
   const effs=S.items.filter(i=>i.grp==='eff'&&i.ok);
   const bw2=88,gap2=18,bx0=42,bhMax=150;
   effs.forEach((it,i)=>{
@@ -2614,15 +2686,15 @@ function drawSensitivity(comb,boil,turb,gen){
     rect(s2,bx,by,bw2,bh,it.col,0.85,2);
     txt(s2,bx+bw2/2,by-6,(tr*100).toFixed(1)+'%',{fill:it.col,'font-size':'13','font-weight':'700','text-anchor':'middle'});
     txt(s2,bx+bw2/2,208,it.lbl,{fill:it.col,'font-size':'8','text-anchor':'middle','font-weight':'700'});
-    txt(s2,bx+bw2/2,220,'+'+(it.dP).toFixed(2)+' kW',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+    txt(s2,bx+bw2/2,220,'+'+(it.dP).toFixed(2)+' kW',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   });
-  txt(s2,W/2,240,'A component sitting late in the chain keeps more of what it gains; an early one has to push its',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
-  txt(s2,W/2,250,'improvement through everything downstream. This is why "our boiler is 3% better" rarely means 3% more power.',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+  txt(s2,W/2,240,'A component sitting late in the chain keeps more of what it gains; an early one has to push its',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
+  txt(s2,W/2,250,'improvement through everything downstream. This is why "our boiler is 3% better" rarely means 3% more power.',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   txt(s2,W/2,268,'η_total = '+(S.base.eta_total*100).toFixed(2)+'%  —  a pure cascade would transmit η_total/η_component',{fill:'#ffc400','font-size':'8','text-anchor':'middle','font-weight':'700'});
 
   // ── PANEL 3: TMF levers against the conventional ones ──
   const s3=clearSvg('svg-sens-ops');
-  txt(s3,8,14,'TMF LEVERS vs CONVENTIONAL — Δη_total [pp]',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+  txt(s3,8,14,'TMF LEVERS vs CONVENTIONAL — Δη_total [pp]',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
   const tmf=S.items.filter(i=>i.grp==='tmf'&&i.ok);
   const conv=S.items.filter(i=>i.grp!=='tmf'&&i.ok).sort((a,b)=>b.dEta-a.dEta).slice(0,4);
   const show=tmf.concat(conv);
@@ -2632,10 +2704,10 @@ function drawSensitivity(comb,boil,turb,gen){
     const y=30+i*rh, bw=Math.max(1,Math.abs(it.dEta)/maxE*280);
     const isTmf=it.grp==='tmf';
     rect(s3,xz,y+2,bw,rh-8,it.col,isTmf?0.9:0.35,1);
-    txt(s3,xz-5,y+rh/2+1,it.lbl+'  '+it.unit,{fill:isTmf?it.col:'#3d5268','font-size':'7.5','text-anchor':'end'});
+    txt(s3,xz-5,y+rh/2+1,it.lbl+'  '+it.unit,{fill:isTmf?it.col:'#6b86a0','font-size':'7.5','text-anchor':'end'});
     txt(s3,xz+bw+5,y+rh/2+1,(it.dEta*100>=0?'+':'')+(it.dEta*100).toFixed(3)+' pp',{fill:it.col,'font-size':'7.5','font-weight':isTmf?'700':'400'});
   });
-  txt(s3,8,H-42,'Solid = TMF inhomogeneity levers. Faded = conventional levers, for scale.',{fill:'#3d5268','font-size':'7'});
+  txt(s3,8,H-42,'Solid = TMF inhomogeneity levers. Faded = conventional levers, for scale.',{fill:'#6b86a0','font-size':'7'});
   // ── KNOWN INCONSISTENCY, surfaced by this very tab [v1.8] ──
   // η_TMF is computed and displayed, but W_mech = m_steam · w_net is built from
   // the real enthalpies alone. The σ layer therefore does NOT feed the power
@@ -2656,7 +2728,7 @@ function drawSensitivity(comb,boil,turb,gen){
   // ── PANEL 4: LHV vs HHV, dew point, and what is still in the stack ──
   const s4=clearSvg('svg-sens-hhv');
   const fe=fuelEnergy(), dp=flueGasDewPoint();
-  txt(s4,8,14,'ENERGY BASIS — LHV vs HHV, AND WHAT IS STILL IN THE STACK',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.10em'});
+  txt(s4,8,14,'ENERGY BASIS — LHV vs HHV, AND WHAT IS STILL IN THE STACK',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.10em'});
   const Q_lhv=P.m_fuel*fe.LHV_wet*1000, Q_hhv=P.m_fuel*fe.HHV_wet*1000;
   const eta_lhv=comb.Q_useful/Math.max(1e-9,Q_lhv), eta_hhv=comb.Q_useful/Math.max(1e-9,Q_hhv);
   const ceilLHV=100*fe.ratio;
@@ -2673,9 +2745,9 @@ function drawSensitivity(comb,boil,turb,gen){
   txt(s4,bx,120,'A boiler advertised at 112% LHV would be '+(112/fe.ratio).toFixed(1)+'% HHV'+(112/fe.ratio>100?' — impossible.':'.'),{fill:112/fe.ratio>100?'#ff1744':'#00e676','font-size':'8','font-weight':'700'});
   // dew point line
   const dl=138;
-  txt(s4,8,dl,'Flue gas leaves at',{fill:'#3d5268','font-size':'8'});
+  txt(s4,8,dl,'Flue gas leaves at',{fill:'#6b86a0','font-size':'8'});
   txt(s4,120,dl,comb.T_fg.toFixed(0)+' °C',{fill:'#ff7043','font-size':'11','font-weight':'700'});
-  txt(s4,175,dl,'· water dew point',{fill:'#3d5268','font-size':'8'});
+  txt(s4,175,dl,'· water dew point',{fill:'#6b86a0','font-size':'8'});
   txt(s4,275,dl,dp.T_dew.toFixed(1)+' °C',{fill:'#00e5ff','font-size':'11','font-weight':'700'});
   txt(s4,335,dl,comb.T_fg>dp.T_dew?'→ nothing condenses':'→ condensing',{fill:comb.T_fg>dp.T_dew?'#ff1744':'#00e676','font-size':'8','font-weight':'700'});
   // what is left in the stack
@@ -2691,13 +2763,13 @@ function drawSensitivity(comb,boil,turb,gen){
   stackBars.forEach(function(b,i){
     const y=156+i*22, w=b.v/mv*175;   // 175 not 230, so the kW label stays inside the viewBox
     rect(s4,248,y,w,15,b.c,0.8,1);
-    txt(s4,243,y+11,b.l,{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+    txt(s4,243,y+11,b.l,{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
     txt(s4,248+w+4,y+11,b.v.toFixed(0)+' kW',{fill:b.c,'font-size':'7.5','font-weight':'700'});
   });
   const stackPct=(Q_sens+Q_lat)/Math.max(1,comb.Q_in)*100;
   txt(s4,W/2,236,(Q_sens+Q_lat).toFixed(0)+' kW — '+stackPct.toFixed(1)+'% of the fuel energy — is still in the flue gas.',{fill:'#ffc400','font-size':'8.5','text-anchor':'middle','font-weight':'700'});
-  txt(s4,W/2,248,'Compare that with the best +1 pp component step above ('+best.dP.toFixed(2)+' kW).',{fill:'#3d5268','font-size':'7.5','text-anchor':'middle'});
-  txt(s4,W/2,262,'This is the point of the tab: the biggest number on the screen is usually not the one being optimised.',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+  txt(s4,W/2,248,'Compare that with the best +1 pp component step above ('+best.dP.toFixed(2)+' kW).',{fill:'#6b86a0','font-size':'7.5','text-anchor':'middle'});
+  txt(s4,W/2,262,'This is the point of the tab: the biggest number on the screen is usually not the one being optimised.',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   txt(s4,W/2,273,'[NUMERICAL] H content per fuel is a typical value; recovery is shown as potential, not as an installed feature.',{fill:'#2a3d54','font-size':'6.5','text-anchor':'middle'});
 }
 
@@ -2881,7 +2953,7 @@ function drawTrajectory(comb,boil,turb,gen){
   // of the whole drawing is scaled uniformly into the panel. Uniform, so the
   // helix is never stretched: the pitch stays readable as a length.
   const s1=clearSvg('svg-traj-helix');
-  txt(s1,8,13,'STATE-SPACE TRAJECTORY — (s, T, ΣS_gen)',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+  txt(s1,8,13,'STATE-SPACE TRAJECTORY — (s, T, ΣS_gen)',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
   const eg=calcEntropyGen(cy,comb,boil.m_steam);
   const egRef=calcEntropyGen(ref,comb,boil.m_steam);
   const hOp=buildHelix(cy,eg), hRef=buildHelix(ref,egRef);
@@ -2904,7 +2976,7 @@ function drawTrajectory(comb,boil,turb,gen){
   const dl=mkPath(dL,{stroke:'#1c2535','stroke-width':'1'}),dv=mkPath(dV,{stroke:'#1c2535','stroke-width':'1'});
   if(dl)s1.appendChild(dl); if(dv)s1.appendChild(dv);
   // classical reference helix (σ ignored), faded — the comparison is the point
-  const rp=mkPath(hRef.map(q=>F(q.s,q.T,q.z)),{stroke:'#3d5268','stroke-width':'1','stroke-dasharray':'3,3',opacity:'0.8'});
+  const rp=mkPath(hRef.map(q=>F(q.s,q.T,q.z)),{stroke:'#6b86a0','stroke-width':'1','stroke-dasharray':'3,3',opacity:'0.8'});
   if(rp)s1.appendChild(rp);
   // operating helix, brightening with each revolution
   for(let c=0;c<HELIX_CYCLES;c++){
@@ -2922,20 +2994,20 @@ function drawTrajectory(comb,boil,turb,gen){
   txt(s1,z0.x-4,z0.y+10,'start',{fill:'#ffc400','font-size':'6.5','text-anchor':'end'});
   // legend
   txt(s1,W-8,24,'▬ operating (σ live)',{fill:'#e040fb','font-size':'7','text-anchor':'end'});
-  txt(s1,W-8,34,'╌ classical reference',{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+  txt(s1,W-8,34,'╌ classical reference',{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
   // readout
   rect(s1,8,H-74,W-16,68,'#0d1017',0.88,3);
   txt(s1,14,H-61,'Pitch per revolution  =  S_gen  =  '+eg.s_tot.toFixed(4)+' kJ/kgK',{fill:'#e040fb','font-size':'9','font-weight':'700'});
-  txt(s1,14,H-49,'Classical reference, σ ignored        '+egRef.s_tot.toFixed(4)+' kJ/kgK',{fill:'#3d5268','font-size':'8'});
+  txt(s1,14,H-49,'Classical reference, σ ignored        '+egRef.s_tot.toFixed(4)+' kJ/kgK',{fill:'#6b86a0','font-size':'8'});
   const dPitch=eg.s_tot-egRef.s_tot;
   txt(s1,14,H-37,'σ_μ = '+cy.sig_mu.toFixed(4)+' widens the pitch by '+(dPitch>=0?'+':'')+dPitch.toFixed(4)+' kJ/kgK ('+(egRef.s_tot>0?(dPitch/egRef.s_tot*100).toFixed(2):'0')+'%)',
-      {fill:dPitch>1e-6?'#ff9100':'#3d5268','font-size':'8','font-weight':'700'});
-  txt(s1,14,H-24,'The loop closes in (s,T). It does not close in ΣS_gen — that is the entire content of the second law,',{fill:'#3d5268','font-size':'7'});
-  txt(s1,14,H-14,'and the only reason there is a spiral here at all. Projection auto-fitted; scale is uniform, not stretched.',{fill:'#3d5268','font-size':'7'});
+      {fill:dPitch>1e-6?'#ff9100':'#6b86a0','font-size':'8','font-weight':'700'});
+  txt(s1,14,H-24,'The loop closes in (s,T). It does not close in ΣS_gen — that is the entire content of the second law,',{fill:'#6b86a0','font-size':'7'});
+  txt(s1,14,H-14,'and the only reason there is a spiral here at all. Projection auto-fitted; scale is uniform, not stretched.',{fill:'#6b86a0','font-size':'7'});
 
   // ── PANEL 2: exergy destruction ──
   const s2=clearSvg('svg-traj-exergy');
-  txt(s2,8,13,'WHERE THE WORK CAPACITY IS DESTROYED — GOUY–STODOLA',{fill:'#3d5268','font-size':'8','letter-spacing':'.10em'});
+  txt(s2,8,13,'WHERE THE WORK CAPACITY IS DESTROYED — GOUY–STODOLA',{fill:'#6b86a0','font-size':'8','letter-spacing':'.10em'});
   const maxX=Math.max.apply(null,eg.parts.map(q=>q.X_kW).concat([gen.P_elec]));
   eg.parts.concat([{lbl:'→ Electrical output',s:0,X_kW:gen.P_elec,col:'#00e676',pct:null}]).forEach(function(q,i){
     const y=34+i*36, w=Math.max(2,q.X_kW/maxX*250);
@@ -2944,13 +3016,13 @@ function drawTrajectory(comb,boil,turb,gen){
     txt(s2,155+w,y+15,q.X_kW.toFixed(1)+' kW'+(q.pct!==null?'  ('+(q.pct*100).toFixed(1)+'%)':''),{fill:q.col,'font-size':'8'});
   });
   txt(s2,8,H-46,'Total exergy destroyed  '+eg.X_dest.toFixed(1)+' kW   ·   Ṡ_gen '+eg.S_dot.toFixed(4)+' kW/K   ·   X = T₀·Ṡ_gen',{fill:'#ffc400','font-size':'8.5','font-weight':'700'});
-  txt(s2,8,H-34,'T_source '+(eg.T_src-273.15).toFixed(0)+' °C [NUMERICAL: mean of flame and stack]  ·  T₀ '+(eg.T_sink-273.15).toFixed(0)+' °C (ambient)',{fill:'#3d5268','font-size':'7'});
-  txt(s2,8,H-22,'Heat crossing the flame-to-steam temperature gap is normally the largest single term — larger than the',{fill:'#3d5268','font-size':'7'});
-  txt(s2,8,H-11,'turbine. That is an argument for recuperation and lower excess air before it is an argument for better blades.',{fill:'#3d5268','font-size':'7'});
+  txt(s2,8,H-34,'T_source '+(eg.T_src-273.15).toFixed(0)+' °C [NUMERICAL: mean of flame and stack]  ·  T₀ '+(eg.T_sink-273.15).toFixed(0)+' °C (ambient)',{fill:'#6b86a0','font-size':'7'});
+  txt(s2,8,H-22,'Heat crossing the flame-to-steam temperature gap is normally the largest single term — larger than the',{fill:'#6b86a0','font-size':'7'});
+  txt(s2,8,H-11,'turbine. That is an argument for recuperation and lower excess air before it is an argument for better blades.',{fill:'#6b86a0','font-size':'7'});
 
   // ── PANEL 3: how the pitch responds to σ ──
   const s3=clearSvg('svg-traj-pitch');
-  txt(s3,8,13,'SPIRAL PITCH vs σ_μ — THE CLAIM, DRAWN',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+  txt(s3,8,13,'SPIRAL PITCH vs σ_μ — THE CLAIM, DRAWN',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
   gridLines(s3,W,H,5,4,52,26,14,44);
   const sw=[];
   const sSave={T:P.sig_T,R:P.sig_rho,V:P.sig_v};
@@ -2971,14 +3043,14 @@ function drawTrajectory(comb,boil,turb,gen){
   const cur=cy.sig_mu;
   s3.appendChild(svgEl('circle',{cx:p3x(Math.min(0.45,cur)),cy:p3y(eg.s_tot),r:'5',fill:'#e040fb',stroke:'#fff','stroke-width':'1.5'}));
   txt(s3,p3x(Math.min(0.45,cur))+7,p3y(eg.s_tot)-5,'you are here',{fill:'#e040fb','font-size':'7'});
-  [0,0.1,0.2,0.3,0.4].forEach(v=>txt(s3,p3x(v),252,v.toFixed(2),{fill:'#3d5268','font-size':'7','text-anchor':'middle'}));
-  txt(s3,W/2,264,'σ_μ  (all three components swept together)',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
-  txt(s3,10,20,'S_gen [kJ/kgK]',{fill:'#3d5268','font-size':'7'});
-  txt(s3,W-14,H-6,'range over the sweep: '+(yHi-yLo).toFixed(4)+' kJ/kgK',{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+  [0,0.1,0.2,0.3,0.4].forEach(v=>txt(s3,p3x(v),252,v.toFixed(2),{fill:'#6b86a0','font-size':'7','text-anchor':'middle'}));
+  txt(s3,W/2,264,'σ_μ  (all three components swept together)',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
+  txt(s3,10,32,'S_gen [kJ/kgK]',{fill:'#6b86a0','font-size':'7'});
+  txt(s3,W-14,H-6,'range over the sweep: '+(yHi-yLo).toFixed(4)+' kJ/kgK',{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
 
   // ── PANEL 4: what a measurement would have to resolve ──
   const s4=clearSvg('svg-traj-falsify');
-  txt(s4,8,13,'FALSIFIABILITY — WHAT AN EXPERIMENT WOULD HAVE TO DETECT',{fill:'#3d5268','font-size':'8','letter-spacing':'.10em'});
+  txt(s4,8,13,'FALSIFIABILITY — WHAT AN EXPERIMENT WOULD HAVE TO DETECT',{fill:'#6b86a0','font-size':'8','letter-spacing':'.10em'});
   gridLines(s4,W,H,5,4,52,26,14,60);
   const pLo=Math.min.apply(null,sw.map(q=>q.P)), pHi=Math.max.apply(null,sw.map(q=>q.P));
   const ppad=Math.max(1e-3,(pHi-pLo)*0.15);
@@ -2986,19 +3058,19 @@ function drawTrajectory(comb,boil,turb,gen){
   const pp=mkPath(sw.map(q=>({x:p3x(q.sig),y:p4y(q.P)})),{stroke:'#00e676','stroke-width':'2.2'});
   if(pp)s4.appendChild(pp);
   s4.appendChild(svgEl('circle',{cx:p3x(Math.min(0.45,cur)),cy:p4y(gen.P_elec),r:'5',fill:'#00e676',stroke:'#fff','stroke-width':'1.5'}));
-  [pLo,pHi].forEach(v=>txt(s4,48,p4y(v)+3,v.toFixed(1),{fill:'#3d5268','font-size':'7','text-anchor':'end'}));
-  txt(s4,10,20,'P_elec [kW]',{fill:'#3d5268','font-size':'7'});
-  [0,0.1,0.2,0.3,0.4].forEach(v=>txt(s4,p3x(v),236,v.toFixed(2),{fill:'#3d5268','font-size':'7','text-anchor':'middle'}));
-  txt(s4,W/2,247,'σ_μ',{fill:'#3d5268','font-size':'7','text-anchor':'middle'});
+  [pLo,pHi].forEach(v=>txt(s4,48,p4y(v)+3,v.toFixed(1),{fill:'#6b86a0','font-size':'7','text-anchor':'end'}));
+  txt(s4,10,32,'P_elec [kW]',{fill:'#6b86a0','font-size':'7'});
+  [0,0.1,0.2,0.3,0.4].forEach(v=>txt(s4,p3x(v),236,v.toFixed(2),{fill:'#6b86a0','font-size':'7','text-anchor':'middle'}));
+  txt(s4,W/2,247,'σ_μ',{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});
   const span=pHi-pLo, spanPct=pHi>0?span/pHi*100:0;
   rect(s4,8,H-40,W-16,34,spanPct<1?'#ff1744':'#00e676',0.10,2);
   txt(s4,14,H-28,'Across the full σ range the model predicts a '+span.toFixed(2)+' kW spread — '+spanPct.toFixed(2)+'% of output.',{fill:spanPct<1?'#ff1744':'#00e676','font-size':'8','font-weight':'700'});
   txt(s4,14,H-17,spanPct<1
       ? 'That is below the resolution of most plant instrumentation. As calibrated (KAPPA_SENS = '+KAPPA_SENS+'), the'
-      : 'That is large enough to be measurable on a real machine with careful instrumentation.',{fill:'#3d5268','font-size':'7'});
+      : 'That is large enough to be measurable on a real machine with careful instrumentation.',{fill:'#6b86a0','font-size':'7'});
   txt(s4,14,H-7,spanPct<1
       ? 'conjecture predicts an effect too small to falsify on a real plant. Raising KAPPA_SENS is a testable claim in itself.'
-      : 'A σ-vs-output experiment could therefore confirm or refute the conjecture directly.',{fill:'#3d5268','font-size':'7'});
+      : 'A σ-vs-output experiment could therefore confirm or refute the conjecture directly.',{fill:'#6b86a0','font-size':'7'});
 }
 
 
@@ -3026,7 +3098,7 @@ function drawTrajectory(comb,boil,turb,gen){
 //  no particulate stage.
 // ══════════════════════════════════════════════════════════════════
 const STAGE_TYPES = {
-  none:  {lbl:'—',                    col:'#3d5268'},
+  none:  {lbl:'—',                    col:'#6b86a0'},
   econ:  {lbl:'Economiser',           col:'#ff9100'},
   dry:   {lbl:'Dry sorbent + filter', col:'#ffea00'},
   wet:   {lbl:'Wet scrubber',         col:'#00e5ff'},
@@ -3111,7 +3183,7 @@ function drawFlue(comb,boil,turb,gen){
 
   // ── PANEL 1: fuel exergy cascade ──
   const s1=clearSvg('svg-flue-cascade');
-  txt(s1,8,13,'FUEL EXERGY CASCADE — WHERE THE WORK POTENTIAL GOES',{fill:'#3d5268','font-size':'8','letter-spacing':'.10em'});
+  txt(s1,8,13,'FUEL EXERGY CASCADE — WHERE THE WORK POTENTIAL GOES',{fill:'#6b86a0','font-size':'8','letter-spacing':'.10em'});
   const steps=[
     {lbl:'Combustion (chemical → thermal)',v:cas.X_comb_lost,col:'#ff1744'},
     {lbl:'Boiler ΔT (flame → steam)',      v:cas.X_boiler,   col:'#ffea00'},
@@ -3135,19 +3207,19 @@ function drawFlue(comb,boil,turb,gen){
   });
   rect(s1,8,H-46,W-16,40,'#0d1017',0.9,3);
   txt(s1,14,H-33,'Fuel chemical exergy '+cas.X_fuel_lo.toFixed(0)+'–'+cas.X_fuel_hi.toFixed(0)+' kW  ·  second-law efficiency '+(cas.eta_ex*100).toFixed(1)+'%',{fill:'#ffc400','font-size':'8.5','font-weight':'700'});
-  txt(s1,14,H-22,'Combustion alone destroys more work potential than the plant produces — and it happens before',{fill:'#3d5268','font-size':'7'});
-  txt(s1,14,H-11,'any heat transfer. Only a different conversion route (e.g. a fuel cell) avoids it, not a better boiler.',{fill:'#3d5268','font-size':'7'});
+  txt(s1,14,H-22,'Combustion alone destroys more work potential than the plant produces — and it happens before',{fill:'#6b86a0','font-size':'7'});
+  txt(s1,14,H-11,'any heat transfer. Only a different conversion route (e.g. a fuel cell) avoids it, not a better boiler.',{fill:'#6b86a0','font-size':'7'});
 
   // ── PANEL 2: flue gas potentials, log scale ──
   const s2=clearSvg('svg-flue-potentials');
-  txt(s2,8,13,'FLUE-GAS POTENTIALS — LOG SCALE, BECAUSE THEY ARE NOT COMPARABLE',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.08em'});
+  txt(s2,8,13,'FLUE-GAS POTENTIALS — LOG SCALE, BECAUSE THEY ARE NOT COMPARABLE',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.08em'});
   const items=pot.items.filter(q=>q.E>0);
   const lo=1e-3, hi=Math.max.apply(null,items.map(q=>q.E))*2;
   const lx=v=>150+Math.log10(Math.max(lo,v)/lo)/Math.log10(hi/lo)*300;
   [1e-3,1e-2,1e-1,1,10,100].forEach(function(t){
     if(t>hi) return;
     s2.appendChild(svgEl('line',{x1:lx(t),y1:26,x2:lx(t),y2:150,stroke:'#1c2535','stroke-width':'1'}));
-    txt(s2,lx(t),162,t>=1?t+' kW':(t*1000)+' W',{fill:'#3d5268','font-size':'6.5','text-anchor':'middle'});
+    txt(s2,lx(t),162,t>=1?t+' kW':(t*1000)+' W',{fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
   });
   items.forEach(function(q,i){
     const y=32+i*29;
@@ -3156,24 +3228,24 @@ function drawFlue(comb,boil,turb,gen){
     txt(s2,145,y+11,q.lbl,{fill:q.col,'font-size':'7.5','text-anchor':'end'});
     txt(s2,lx(q.E)+6,y+11,q.E>=1?q.E.toFixed(1)+' kW':(q.E*1000).toFixed(1)+' W',{fill:q.col,'font-size':'7'});
   });
-  txt(s2,150,180,'▬ energy   ○ exergy (work potential)',{fill:'#3d5268','font-size':'7'});
-  txt(s2,8,196,'Duct Ø'+pot.D.toFixed(2)+' m → '+pot.v.toFixed(1)+' m/s.  Kinetic and chemical are three to four orders of',{fill:'#3d5268','font-size':'7'});
-  txt(s2,8,207,'magnitude below thermal. The decomposition is worth doing precisely because it says: ignore them.',{fill:'#3d5268','font-size':'7'});
+  txt(s2,150,180,'▬ energy   ○ exergy (work potential)',{fill:'#6b86a0','font-size':'7'});
+  txt(s2,8,196,'Duct Ø'+pot.D.toFixed(2)+' m → '+pot.v.toFixed(1)+' m/s.  Kinetic and chemical are three to four orders of',{fill:'#6b86a0','font-size':'7'});
+  txt(s2,8,207,'magnitude below thermal. The decomposition is worth doing precisely because it says: ignore them.',{fill:'#6b86a0','font-size':'7'});
   txt(s2,8,224,'EM / radiation is deliberately absent: thermal radiation is a transfer mechanism already inside the',{fill:'#ff9100','font-size':'7'});
   txt(s2,8,235,'thermal term, and listing it separately would double-count. Flame ionisation is real but ppm-level —',{fill:'#ff9100','font-size':'7'});
   txt(s2,8,246,'usable for SENSING and combustion control, not as an energy source. That distinction is the point.',{fill:'#ff9100','font-size':'7'});
-  txt(s2,8,266,'Chemical term assumes CO = '+(P.flue_CO||200)+' mg/Nm³. At that level it is a tuning fault, not a resource.',{fill:'#3d5268','font-size':'6.5'});
+  txt(s2,8,266,'Chemical term assumes CO = '+(P.flue_CO||200)+' mg/Nm³. At that level it is a tuning fault, not a resource.',{fill:'#6b86a0','font-size':'6.5'});
 
   // ── PANEL 3: cooling window + treatment train ──
   const s3=clearSvg('svg-flue-limit');
-  txt(s3,8,13,'STACK COOLING WINDOW — AND WHAT THE TRAIN ORDER DOES TO IT',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.08em'});
+  txt(s3,8,13,'STACK COOLING WINDOW — AND WHAT THE TRAIN ORDER DOES TO IT',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.08em'});
   const tl=40, tr=470, tempMin=0, tempMax=Math.max(260,comb.T_fg+40);
   const tx=T=>tl+(T-tempMin)/(tempMax-tempMin)*(tr-tl);
   const yb=68;
   rect(s3,tl,yb,tr-tl,14,'#1c2535',0.8,2);
   rect(s3,tx(lim.T_min),yb,Math.max(2,tx(comb.T_fg)-tx(lim.T_min)),14,'#00e676',0.55,2);
   rect(s3,tx(lim.T_dew),yb,Math.max(2,tx(lim.T_min)-tx(lim.T_dew)),14,'#ff1744',0.35,2);
-  [[P.T_air,'#3d5268','ambient',0],[lim.T_dew,'#00e5ff','dew point',1],
+  [[P.T_air,'#6b86a0','ambient',0],[lim.T_dew,'#00e5ff','dew point',1],
    [lim.T_min,'#ffea00','corrosion limit',2],[comb.T_fg,'#ff7043','flue gas',3]
   ].forEach(function(q){
     s3.appendChild(svgEl('line',{x1:tx(q[0]),y1:yb-5,x2:tx(q[0]),y2:yb+20,stroke:q[1],'stroke-width':'1.5'}));
@@ -3186,7 +3258,7 @@ function drawFlue(comb,boil,turb,gen){
 
   // the train
   const tt=runTreatmentTrain(comb);
-  txt(s3,8,yb+50,'TREATMENT TRAIN — set the order in the sidebar',{fill:'#3d5268','font-size':'7.5','letter-spacing':'.10em'});
+  txt(s3,8,yb+50,'TREATMENT TRAIN — set the order in the sidebar',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.10em'});
   let bxp=24;
   const boxW=132, gapW=14;
   tt.steps.forEach(function(st,i){
@@ -3198,17 +3270,17 @@ function drawFlue(comb,boil,turb,gen){
     txt(s3,bxp+boxW/2,yb+74,String(i+1)+'. '+ty.lbl,{fill:ty.col,'font-size':'7.5','text-anchor':'middle','font-weight':'700'});
     if(on){
       txt(s3,bxp+boxW/2,yb+87,st.T_before.toFixed(0)+'° → '+st.T.toFixed(0)+'°C',{fill:'#c5d5e8','font-size':'7.5','text-anchor':'middle'});
-      txt(s3,bxp+boxW/2,yb+98,st.Q>0.5?('+'+st.Q.toFixed(0)+' kW'):'no heat',{fill:st.Q>0.5?'#00e676':'#3d5268','font-size':'7','text-anchor':'middle'});
-      txt(s3,bxp+boxW/2,yb+108,st.note,{fill:'#3d5268','font-size':'6','text-anchor':'middle'});
+      txt(s3,bxp+boxW/2,yb+98,st.Q>0.5?('+'+st.Q.toFixed(0)+' kW'):'no heat',{fill:st.Q>0.5?'#00e676':'#6b86a0','font-size':'7','text-anchor':'middle'});
+      txt(s3,bxp+boxW/2,yb+108,st.note,{fill:'#6b86a0','font-size':'6','text-anchor':'middle'});
     }
-    if(i<2){ txt(s3,bxp+boxW+4,yb+88,'→',{fill:'#3d5268','font-size':'11'}); }
+    if(i<2){ txt(s3,bxp+boxW+4,yb+88,'→',{fill:'#6b86a0','font-size':'11'}); }
     bxp+=boxW+gapW;
   });
   rect(s3,8,H-52,W-16,46,'#0d1017',0.9,3);
   txt(s3,14,H-39,'Heat recovered '+tt.Q_rec.toFixed(0)+' kW  ·  HCl removed '+(tt.captured*100).toFixed(0)+'%  ·  stack out '+tt.T_out.toFixed(0)+' °C',
       {fill:'#ffc400','font-size':'8.5','font-weight':'700'});
   txt(s3,14,H-28,tt.kgh_Ca>0.001?('Ca(OH)₂ demand '+tt.kgh_Ca.toFixed(2)+' kg/h ≈ '+(tt.kgh_Ca*8000/1000).toFixed(1)+' t/year, plus the chloride residue'):'No sorbent consumed.',
-      {fill:'#3d5268','font-size':'7'});
+      {fill:'#6b86a0','font-size':'7'});
   const wetFirst = tt.steps.findIndex(s=>s.k==='wet'||s.k==='cond');
   const econAfter = tt.steps.findIndex(s=>s.k==='econ');
   const badOrder = wetFirst>=0 && econAfter>wetFirst;
@@ -3221,7 +3293,7 @@ function drawFlue(comb,boil,turb,gen){
 
   // ── PANEL 4: the drying loop ──
   const s4=clearSvg('svg-flue-drying');
-  txt(s4,8,13,'THE LOOP: STACK HEAT → FUEL DRYING → MORE POWER',{fill:'#3d5268','font-size':'8','letter-spacing':'.10em'});
+  txt(s4,8,13,'THE LOOP: STACK HEAT → FUEL DRYING → MORE POWER',{fill:'#6b86a0','font-size':'8','letter-spacing':'.10em'});
   const dl=calcDryingLoop(comb,gen);
   const rows=dl.rows.filter(function(r,i){return i>0;});
   const maxG=Math.max(0.1,Math.max.apply(null,rows.map(r=>r.gain)));
@@ -3242,8 +3314,8 @@ function drawFlue(comb,boil,turb,gen){
   txt(s4,14,H-45,'Low-grade heat available above the corrosion limit: '+dl.Q_avail.toFixed(0)+' kW',{fill:'#00e5ff','font-size':'8.5','font-weight':'700'});
   if(best) txt(s4,14,H-33,'Best feasible step: dry to '+best.mc.toFixed(0)+'% MC — spend '+best.Q_dry.toFixed(1)+' kW of waste heat, gain '+best.gain.toFixed(1)+' kW of electricity.',{fill:'#00e676','font-size':'8','font-weight':'700'});
   else txt(s4,14,H-33,'No drying step fits inside the available heat at this operating point.',{fill:'#ff1744','font-size':'8'});
-  txt(s4,14,H-21,'This is exergy matching done right: the lowest-grade heat in the plant sent to the one job where',{fill:'#3d5268','font-size':'7'});
-  txt(s4,14,H-10,'grade does not matter — evaporating water — feeding the highest-payback lever in the whole model.',{fill:'#3d5268','font-size':'7'});
+  txt(s4,14,H-21,'This is exergy matching done right: the lowest-grade heat in the plant sent to the one job where',{fill:'#6b86a0','font-size':'7'});
+  txt(s4,14,H-10,'grade does not matter — evaporating water — feeding the highest-payback lever in the whole model.',{fill:'#6b86a0','font-size':'7'});
 }
 
 // ── SIDEBAR ──
@@ -3680,6 +3752,41 @@ function renderAll(){
   else if(activeTab===10)drawSensitivity(comb,boil,turb,gen);
   else if(activeTab===11)drawTrajectory(comb,boil,turb,gen);
   else if(activeTab===12)drawFlue(comb,boil,turb,gen);
+  dedupePanelTitles();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DUPLICATE PANEL TITLES [v2.2.1]
+//
+//  Every panel carries a CSS .panel-title absolutely positioned at top-left,
+//  and most panels ALSO draw their own header inside the SVG at y≈14-16 —
+//  frequently with the same words. The two have always overlapped; at 8 px in
+//  #3d5268 the collision read as blur rather than as text, so it went unnoticed
+//  for eight versions. Raising the floor to 11 px made it glaring.
+//
+//  This is a pre-existing defect, not one the typography pass introduced: the
+//  overlap is present and identical in the v2.2 baseline. Verified by rendering
+//  both files and comparing.
+//
+//  Fix: where the SVG draws its own header in the title band, the outer CSS
+//  title is the redundant one — the inner header usually carries a subtitle the
+//  outer does not. So hide the outer and keep the informative one.
+// ══════════════════════════════════════════════════════════════════
+function dedupePanelTitles(){
+  document.querySelectorAll('.panel').forEach(pn=>{
+    const t=pn.querySelector('.panel-title'), sv=pn.querySelector('svg');
+    if(!t) return;
+    if(!sv){ t.style.display=''; return; }
+    const vb=sv.viewBox&&sv.viewBox.baseVal;
+    const band=vb&&vb.height>0?Math.max(18,vb.height*0.09):18; // the title band, in user units
+    let collides=false;
+    sv.querySelectorAll('text').forEach(e=>{
+      if(collides) return;
+      const y=parseFloat(e.getAttribute('y'));
+      if(isFinite(y)&&y<=band&&(e.textContent||'').trim().length>2) collides=true;
+    });
+    t.style.display=collides?'none':'';
+  });
 }
 
 // ── TAB SWITCH ──
@@ -3721,7 +3828,7 @@ function drawOTDD(comb,boil,turb,gen,imp){
   // ── CHART 1: T_θ Iteration convergence ──
   {
     const s=clearSvg('svg-otdd-iter'); gridLines(s,500,280);
-    txt(s,8,14,'T_θ OPERATOR ITERATION — CONVERGENCE TO ρ*',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+    txt(s,8,14,'T_θ OPERATOR ITERATION — CONVERGENCE TO ρ*',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
     const pl=44,pt=22,pw=438,ph=222,steps=5;
     const labels=['Pump','Preheat','Evap','Superheat','Expand','Cond'];
     // Simulate convergence: rho[n] → rho_star from random start
@@ -3747,14 +3854,14 @@ function drawOTDD(comb,boil,turb,gen,imp){
     for(let si=0;si<steps;si++){
       const xi=Math.round(si*40/steps), xpos=pl+xi/40*pw;
       s.appendChild(svgEl('line',{x1:xpos,y1:pt,x2:xpos,y2:pt+ph,stroke:'#1c2535','stroke-width':'1','stroke-dasharray':'2,4'}));
-      txt(s,xpos+2,pt+ph+12,labels[si],{fill:'#3d5268','font-size':'7'});
+      txt(s,xpos+2,pt+ph+12,labels[si],{fill:'#6b86a0','font-size':'7'});
     }
     // Y-axis ticks
     [0.2,0.4,0.6,0.8,1.0].forEach(v=>{
-      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#3d5268','stroke-width':'1'}));
-      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#6b86a0','stroke-width':'1'}));
+      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
     });
-    txt(s,8,pt+ph/2,'ρ(n)',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    txt(s,8,pt+ph/2,'ρ(n)',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
     // Current state dot
     s.appendChild(svgEl('circle',{cx:xOf(40),cy:yOf(pts[40]),r:'5',fill:'#00e5ff',stroke:'#07090f','stroke-width':'1.5'}));
     txt(s,pl+pw-4,pt+12,`σ_μ=${sig.toFixed(4)}  gap=${gap.toFixed(3)}`,{fill:'#00e5ff','font-size':'9','text-anchor':'end'});
@@ -3763,7 +3870,7 @@ function drawOTDD(comb,boil,turb,gen,imp){
   // ── CHART 2: Kernel class 2D map ──
   {
     const s=clearSvg('svg-otdd-kernel'); gridLines(s,500,280);
-    txt(s,8,14,'KERNEL CLASS — (N_branches, scaling) PARAMETER SPACE',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+    txt(s,8,14,'KERNEL CLASS — (N_branches, scaling) PARAMETER SPACE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
     const pl=50,pt=22,pw=420,ph=222;
     const xOf=N=>pl+(N-1)/9*pw, yOf=sig_v=>pt+ph*(1-sig_v/0.3);
     // Axis
@@ -3790,14 +3897,14 @@ function drawOTDD(comb,boil,turb,gen,imp){
     s.appendChild(svgEl('circle',{cx:xOf(P.imp_branches),cy:yOf(Math.min(0.28,odi+sig*0.3)),r:'7',fill:'none',stroke:'#e040fb','stroke-width':'2.5'}));
     s.appendChild(svgEl('circle',{cx:xOf(P.imp_branches),cy:yOf(Math.min(0.28,odi+sig*0.3)),r:'3.5',fill:'#e040fb'}));
     // X axis labels
-    [1,3,5,7,10].forEach(N=>txt(s,xOf(N),pt+ph+12,N,{fill:'#3d5268','font-size':'7','text-anchor':'middle'}));
-    txt(s,pl+pw/2,pt+ph+22,'N_branches',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    [1,3,5,7,10].forEach(N=>txt(s,xOf(N),pt+ph+12,N,{fill:'#6b86a0','font-size':'7','text-anchor':'middle'}));
+    txt(s,pl+pw/2,pt+ph+22,'N_branches',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
     // Y axis
     [0.1,0.2,0.3].forEach(v=>{
-      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#3d5268','stroke-width':'1'}));
-      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#6b86a0','stroke-width':'1'}));
+      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
     });
-    txt(s,12,pt+ph/2,'ODI',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    txt(s,12,pt+ph/2,'ODI',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
     // Legend
     [['#00e5ff','Murray d³'],['#ff7043','Leonardo d²'],['#e040fb','Current']].forEach(([col,lbl],i)=>{
       s.appendChild(svgEl('circle',{cx:pl+8,cy:pt+ph-28+i*14,r:'4',fill:col}));
@@ -3808,7 +3915,7 @@ function drawOTDD(comb,boil,turb,gen,imp){
   // ── CHART 3: ODI phase diagram (σ, η_turb) ──
   {
     const s=clearSvg('svg-otdd-phase'); gridLines(s,500,280);
-    txt(s,8,14,'ODI PHASE DIAGRAM — (σ_μ, η_turb) PARAMETER SPACE',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+    txt(s,8,14,'ODI PHASE DIAGRAM — (σ_μ, η_turb) PARAMETER SPACE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
     const pl=50,pt=22,pw=420,ph=222;
     const xOf=sv=>pl+sv/0.3*pw, yOf=et=>pt+ph-(et-0.15)/0.7*ph;
     // Axis lines
@@ -3840,16 +3947,16 @@ function drawOTDD(comb,boil,turb,gen,imp){
     s.appendChild(svgEl('circle',{cx:cx_,cy:cy_,r:'3',fill:'#e040fb'}));
     txt(s,cx_+8,cy_-6,`(σ=${sig.toFixed(3)}, η=${turb.eta_cl.toFixed(3)})`,{fill:'#e040fb','font-size':'8'});
     // Axis ticks
-    [0.05,0.10,0.15,0.20,0.25].forEach(sv=>{txt(s,xOf(sv),pt+ph+12,sv.toFixed(2),{fill:'#3d5268','font-size':'7','text-anchor':'middle'});});
-    [0.2,0.3,0.4,0.5,0.6,0.7].forEach(et=>{txt(s,pl-5,yOf(et)+3,et.toFixed(1),{fill:'#3d5268','font-size':'7','text-anchor':'end'});});
-    txt(s,pl+pw/2,pt+ph+22,'σ_μ',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-    txt(s,12,pt+ph/2,'η_turb',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    [0.05,0.10,0.15,0.20,0.25].forEach(sv=>{txt(s,xOf(sv),pt+ph+12,sv.toFixed(2),{fill:'#6b86a0','font-size':'7','text-anchor':'middle'});});
+    [0.2,0.3,0.4,0.5,0.6,0.7].forEach(et=>{txt(s,pl-5,yOf(et)+3,et.toFixed(1),{fill:'#6b86a0','font-size':'7','text-anchor':'end'});});
+    txt(s,pl+pw/2,pt+ph+22,'σ_μ',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+    txt(s,12,pt+ph/2,'η_turb',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
   }
 
   // ── CHART 4: Spectral gap bar + convergence rate ──
   {
     const s=clearSvg('svg-otdd-spec'); gridLines(s,500,280);
-    txt(s,8,14,'SPECTRAL GAP & CONVERGENCE RATE',{fill:'#3d5268','font-size':'8','letter-spacing':'.12em'});
+    txt(s,8,14,'SPECTRAL GAP & CONVERGENCE RATE',{fill:'#6b86a0','font-size':'8','letter-spacing':'.12em'});
     const pl=50,pt=24,pw=420,ph=210;
     // Convergence rate vs iteration
     const iters=30;
@@ -3870,13 +3977,13 @@ function drawOTDD(comb,boil,turb,gen,imp){
     txt(s,pl+pw-4,pt+12,`Gap = ${gap.toFixed(4)}  (${gap>0.65?'fast':gap>0.35?'medium':'slow'})`,{fill:'#e040fb','font-size':'9','text-anchor':'end'});
     txt(s,pl+pw-4,pt+24,`σ_μ=${sig.toFixed(4)}  η_entr=${imp.eta_entr.toFixed(4)}`,{fill:'#00e5ff','font-size':'8','text-anchor':'end'});
     // Axis ticks
-    [0,5,10,15,20,25,30].forEach(i=>txt(s,xOf(i),pt+ph+12,i,{fill:'#3d5268','font-size':'7','text-anchor':'middle'}));
+    [0,5,10,15,20,25,30].forEach(i=>txt(s,xOf(i),pt+ph+12,i,{fill:'#6b86a0','font-size':'7','text-anchor':'middle'}));
     [0.2,0.4,0.6,0.8,1.0].forEach(v=>{
-      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#3d5268','stroke-width':'1'}));
-      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#3d5268','font-size':'7','text-anchor':'end'});
+      s.appendChild(svgEl('line',{x1:pl-3,y1:yOf(v),x2:pl,y2:yOf(v),stroke:'#6b86a0','stroke-width':'1'}));
+      txt(s,pl-5,yOf(v)+3,v.toFixed(1),{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
     });
-    txt(s,pl+pw/2,pt+ph+22,'iterations n',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
-    txt(s,12,pt+ph/2,'||ρⁿ−ρ*||',{fill:'#3d5268','font-size':'8','text-anchor':'middle'});
+    txt(s,pl+pw/2,pt+ph+22,'iterations n',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
+    txt(s,12,pt+ph/2,'||ρⁿ−ρ*||',{fill:'#6b86a0','font-size':'8','text-anchor':'middle'});
     // Gap bar visual
     const barY=pt+4,barH=10,barW=pw*0.5;
     s.appendChild(svgEl('rect',{x:pl,y:barY,width:barW,height:barH,fill:'#1c2535',rx:'2'}));
@@ -4021,7 +4128,7 @@ function animDrawTS(cv,ap,cy,stepIdx,stepT){
   ctx.strokeStyle='#1c2535';ctx.lineWidth=1.5;
   ctx.beginPath();SAT.forEach((r,i)=>i===0?ctx.moveTo(tx(r[3]),ty(r[0])):ctx.lineTo(tx(r[3]),ty(r[0])));ctx.stroke();
   ctx.beginPath();SAT.forEach((r,i)=>i===0?ctx.moveTo(tx(r[4]),ty(r[0])):ctx.lineTo(tx(r[4]),ty(r[0])));ctx.stroke();
-  ctx.globalAlpha=0.05;ctx.fillStyle='#3d5268';
+  ctx.globalAlpha=0.05;ctx.fillStyle='#6b86a0';
   ctx.beginPath();SAT.forEach((r,i)=>i===0?ctx.moveTo(tx(r[3]),ty(r[0])):ctx.lineTo(tx(r[3]),ty(r[0])));
   SAT.slice().reverse().forEach(r=>ctx.lineTo(tx(r[4]),ty(r[0])));ctx.fill();ctx.globalAlpha=1;
   // [FIX v1.4] Reference cycle with correct phase boundaries
@@ -4056,7 +4163,7 @@ function animDrawTS(cv,ap,cy,stepIdx,stepT){
     ctx.beginPath();ctx.arc(px_,py_,3,0,Math.PI*2);ctx.fillStyle=ANIM_STEPS[stepIdx].color;ctx.fill();
   }
   // Labels
-  animFont(ctx,8);ctx.fillStyle='#3d5268';
+  animFont(ctx,8);ctx.fillStyle='#6b86a0';
   [1,3,5,7,9].forEach(s=>{const x=tx(s);if(x>=pl&&x<=pl+pw)ctx.fillText(s,x-4,pt+ph+16);});
   ctx.fillText('s [kJ/kgK]',pl+pw/2-25,pt+ph+26);
   [100,200,300,400,500].forEach(T=>{if(T>=TMin&&T<=TMax)ctx.fillText(T,pl-34,ty(T)+3);});
@@ -4082,7 +4189,7 @@ function animDrawSankey(cv,ap,cy,stepIdx,stepT,gt){
     const r=3;ctx.beginPath();ctx.moveTo(bx+r,by);ctx.lineTo(bx+bw-r,by);ctx.quadraticCurveTo(bx+bw,by,bx+bw,by+r);ctx.lineTo(bx+bw,by+bh-r);ctx.quadraticCurveTo(bx+bw,by+bh,bx+bw-r,by+bh);ctx.lineTo(bx+r,by+bh);ctx.quadraticCurveTo(bx,by+bh,bx,by+bh-r);ctx.lineTo(bx,by+r);ctx.quadraticCurveTo(bx,by,bx+r,by);ctx.closePath();ctx.fill();ctx.restore();
     animFont(ctx,isActive?11:10,'Space Mono, monospace');ctx.fillStyle=isActive?'#fff':b.col;ctx.textAlign='center';
     ctx.fillText(`${b.val.toFixed(0)} kW`,bx+bw/2,by+bh/2+4);
-    animFont(ctx,8);ctx.fillStyle='#3d5268';ctx.fillText(b.lbl,bx+bw/2,by-7);ctx.textAlign='left';
+    animFont(ctx,8);ctx.fillStyle='#6b86a0';ctx.fillText(b.lbl,bx+bw/2,by-7);ctx.textAlign='left';
     if(i<blocks.length-1){
       const nb=blocks[i+1],ax1=bx+bw+2,ax2=nb.x*W-2,ay=H/2+10;
       ctx.save();ctx.globalAlpha=isActive?0.8:0.2;ctx.strokeStyle=b.col;ctx.lineWidth=Math.max(2,(b.val/maxV)*10);
@@ -4117,9 +4224,9 @@ function animDrawMu(cv,ap,cy,stepIdx,stepT,gt){
   ctx.strokeStyle=col;ctx.lineWidth=2.5;ctx.shadowColor=col;ctx.shadowBlur=5;ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();ctx.shadowBlur=0;
   const kappa=1/(sigA+0.005),deltaEta=0.15*sigA*sigA*Math.min(kappa,20)/20;
   animFont(ctx,10,'Space Mono, monospace');ctx.fillStyle=col;ctx.textAlign='right';ctx.fillText(`σ_μ = ${sigA.toFixed(3)}`,pl+pw,pt+14);
-  animFont(ctx,8);ctx.fillStyle='#3d5268';ctx.fillText(`κ(μ) = ${kappa.toFixed(2)}`,pl+pw,pt+26);ctx.fillStyle=deltaEta>0.02?'#ff7043':'#00e676';
+  animFont(ctx,8);ctx.fillStyle='#6b86a0';ctx.fillText(`κ(μ) = ${kappa.toFixed(2)}`,pl+pw,pt+26);ctx.fillStyle=deltaEta>0.02?'#ff7043':'#00e676';
   ctx.fillText(`Δη_loss = −${(deltaEta*100).toFixed(2)}%`,pl+pw,pt+38);ctx.textAlign='left';
-  animFont(ctx,8);ctx.fillStyle='#3d5268';
+  animFont(ctx,8);ctx.fillStyle='#6b86a0';
   [ap.T_c,ap.T_b,ap.T_sh].forEach(T=>{if(T>=Tmin&&T<=Tmax){ctx.fillText(`${Math.round(T)}°`,tx(T)-8,pt+ph+14);ctx.strokeStyle='#1c2535';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(tx(T),pt);ctx.lineTo(tx(T),pt+ph);ctx.stroke();ctx.setLineDash([]);}});
   ctx.fillText('Temperature / energy proxy',pl+pw/2-55,pt+ph+24);
 }
@@ -4153,7 +4260,7 @@ function animDrawSteam(cv,ap,cy,stepIdx,stepT,gt){
   if(animX<1.0&&(stepIdx===1||stepIdx===2)){
     const lp=drawn[drawn.length-1];if(lp){const r=4+2*Math.sin(gt*0.1);ctx.beginPath();ctx.arc(tx_x(lp[0]),ty_h(lp[1]),r,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.beginPath();ctx.arc(tx_x(lp[0]),ty_h(lp[1]),r*0.55,0,Math.PI*2);ctx.fillStyle='#ff7043';ctx.fill();}
   }
-  animFont(ctx,8);ctx.fillStyle='#3d5268';
+  animFont(ctx,8);ctx.fillStyle='#6b86a0';
   [h4,h_4a,h_1a,h1].forEach(h=>{if(h>=hMin&&h<=hMax)ctx.fillText(`${Math.round(h)}`,pl-52,ty_h(h)+3);});
   ctx.fillText('h [kJ/kg]',4,pt+ph/2+3);ctx.fillText('Boiler length (0=in, 1=out)',pl+pw/2-55,pt+ph+24);
   animFont(ctx,9,'Space Mono, monospace');ctx.fillStyle='#00e5ff';ctx.textAlign='right';
@@ -4183,7 +4290,7 @@ function animUpdateStepBar(stepIdx,stepT){
   ANIM_STEPS.forEach((s,i)=>{
     const item=document.getElementById(`astep-${i}`),title=document.getElementById(`astitle-${i}`),prog=document.getElementById(`asprog-${i}`),dot=document.getElementById(`asdot-${i}`);
     if(!item)return;
-    if(i<stepIdx){item.className='step-item';if(title)title.style.color='#3d5268';if(prog){prog.style.width='100%';prog.style.opacity='0.4';}if(dot)dot.style.boxShadow='none';item.style.borderBottomColor='transparent';}
+    if(i<stepIdx){item.className='step-item';if(title)title.style.color='#6b86a0';if(prog){prog.style.width='100%';prog.style.opacity='0.4';}if(dot)dot.style.boxShadow='none';item.style.borderBottomColor='transparent';}
     else if(i===stepIdx){item.className='step-item active';if(title)title.style.color=s.color;if(prog){prog.style.width=`${stepT*100}%`;prog.style.opacity='1';}if(dot)dot.style.boxShadow=`0 0 6px ${s.color}`;item.style.borderBottomColor=s.color;}
     else{item.className='step-item';if(title)title.style.color='var(--dim)';if(prog)prog.style.width='0%';if(dot)dot.style.boxShadow='none';item.style.borderBottomColor='transparent';}
   });
@@ -4387,7 +4494,7 @@ function chaosDrawGauge(K){
   ctx.beginPath();ctx.arc(cx,cy,r*0.08,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
 
   // Tick labels
-  ctx.font=`${Math.max(8,r*0.12)}px Space Mono,monospace`;ctx.fillStyle='#3d5268';ctx.textAlign='center';
+  ctx.font=`${Math.max(8,r*0.12)}px Space Mono,monospace`;ctx.fillStyle='#6b86a0';ctx.textAlign='center';
   [[0,'0'],[0.5,'0.5'],[1,'1']].forEach(([f,lbl])=>{
     const a=startA+f*Math.PI;
     ctx.fillText(lbl,cx+(r*1.22)*Math.cos(a),cy+(r*1.22)*Math.sin(a)+3);
@@ -4406,7 +4513,7 @@ function chaosCvsHistory(K_sys,K_th,K_hyd,K_gen){
     const y=pt+ph*(1-v);
     ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(pl+pw,y);
     ctx.strokeStyle='#1c2535';ctx.lineWidth=1;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
-    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#3d5268';ctx.textAlign='left';
+    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#6b86a0';ctx.textAlign='left';
     ctx.fillText(v.toFixed(1),pl+2,y-2);
   });
   // Threshold fills [FIX v1.6]
@@ -4472,7 +4579,7 @@ function chaosCvsBars(K_th,K_hyd,K_gen,K_sys){
     // Labels
     ctx.font='bold 9px Space Mono,monospace';ctx.fillStyle=b.col;ctx.textAlign='center';
     ctx.fillText(b.val.toFixed(3),x+bww/2,by-4);
-    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#3d5268';
+    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#6b86a0';
     ctx.fillText(b.label,x+bww/2,H-8);
     ctx.fillText(b.sub,x+bww/2,H-20-maxH-4);
   });
@@ -4487,8 +4594,8 @@ function chaosCvsSigma(){
 
   // Grid & axes
   ctx.strokeStyle='#1c2535';ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){const x=pl+i*pw/4;ctx.beginPath();ctx.moveTo(x,pt);ctx.lineTo(x,pt+ph);ctx.stroke();ctx.font='7px Space Mono,monospace';ctx.fillStyle='#3d5268';ctx.textAlign='center';ctx.fillText((i*0.25*SIGMA_MAX).toFixed(2),x,pt+ph+12);}
-  for(let i=0;i<=4;i++){const y=pt+i*ph/4;ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(pl+pw,y);ctx.stroke();ctx.fillStyle='#3d5268';ctx.textAlign='right';ctx.fillText((1-i/4).toFixed(2),pl-3,y+3);}
+  for(let i=0;i<=4;i++){const x=pl+i*pw/4;ctx.beginPath();ctx.moveTo(x,pt);ctx.lineTo(x,pt+ph);ctx.stroke();ctx.font='7px Space Mono,monospace';ctx.fillStyle='#6b86a0';ctx.textAlign='center';ctx.fillText((i*0.25*SIGMA_MAX).toFixed(2),x,pt+ph+12);}
+  for(let i=0;i<=4;i++){const y=pt+i*ph/4;ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(pl+pw,y);ctx.stroke();ctx.fillStyle='#6b86a0';ctx.textAlign='right';ctx.fillText((1-i/4).toFixed(2),pl-3,y+3);}
 
   // Theoretical line K = σ/σ_max
   ctx.beginPath();
@@ -4511,7 +4618,7 @@ function chaosCvsSigma(){
     ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
     ctx.fillStyle='#e040fb';ctx.shadowColor='#e040fb';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
   }
-  ctx.font='7px Space Mono,monospace';ctx.fillStyle='#3d5268';ctx.textAlign='center';
+  ctx.font='7px Space Mono,monospace';ctx.fillStyle='#6b86a0';ctx.textAlign='center';
   ctx.fillText('σ_μ',pl+pw/2,pt+ph+20);
   ctx.save();ctx.translate(10,pt+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('K_thermal',0,0);ctx.restore();
   ctx.fillStyle='rgba(224,64,251,0.5)';ctx.fillText('K = σ/σ_max (theory)',pl+pw-30,pt+ph-6);
@@ -4529,7 +4636,7 @@ function chaosCvsBearing(){
   [0,0.25,0.5,0.75,1].forEach(v=>{
     const y=pt+ph*(1-v);ctx.beginPath();ctx.moveTo(pl,y);ctx.lineTo(pl+pw,y);
     ctx.strokeStyle='#1c2535';ctx.lineWidth=1;ctx.stroke();
-    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#3d5268';ctx.textAlign='right';ctx.fillText(v.toFixed(2),pl-3,y+3);
+    ctx.font='7px Space Mono,monospace';ctx.fillStyle='#6b86a0';ctx.textAlign='right';ctx.fillText(v.toFixed(2),pl-3,y+3);
   });
 
   if(n>=2){
@@ -4553,7 +4660,7 @@ function chaosCvsBearing(){
   // Labels
   ctx.font='7px Space Mono,monospace';ctx.fillStyle='#ffea00';ctx.textAlign='left';ctx.fillText('Δf [norm]',pl+4,pt+12);
   ctx.fillStyle='#ff1744';ctx.fillText('Wear idx',pl+4,pt+22);
-  ctx.fillStyle='#3d5268';ctx.textAlign='center';ctx.fillText('time →',pl+pw/2,pt+ph+14);
+  ctx.fillStyle='#6b86a0';ctx.textAlign='center';ctx.fillText('time →',pl+pw/2,pt+ph+14);
 
   // Current bearing state annotation
   if(n>0){
@@ -4878,7 +4985,7 @@ function dlUpdateUI(rec){
     <td style="padding:3px 6px;text-align:right;color:var(--green)">${r.P_elec.toFixed(1)}</td>
     <td style="padding:3px 6px;text-align:right;color:var(--orange)">${rec.params.T_sh}</td>
     <td style="padding:3px 6px;color:var(--dim);white-space:nowrap">${(rec.source||'—').slice(0,10)}</td>
-    <td style="padding:3px 6px;color:#3d5268;font-size:7px;white-space:nowrap">${shortHash}</td>
+    <td style="padding:3px 6px;color:#6b86a0;font-size:7px;white-space:nowrap">${shortHash}</td>
     <td style="padding:3px 6px;text-align:center">${chainBadge}</td>`;
   tbody.insertBefore(tr, tbody.firstChild); // newest on top
   // Keep max 500 rows in DOM
@@ -4935,7 +5042,7 @@ function dlDrawMiniChart(id, values, color, yMin, yMax, critThresh){
   ctx.font='8px Space Mono,monospace';ctx.fillStyle=color;ctx.textAlign='right';
   ctx.fillText(last.toFixed(3),W-pr,pt+10);
   // x-label
-  ctx.fillStyle='#3d5268';ctx.textAlign='left';
+  ctx.fillStyle='#6b86a0';ctx.textAlign='left';
   ctx.fillText(values.length+' rec',pl,H-2);
 }
 
@@ -5132,6 +5239,7 @@ window.addEventListener('load',()=>{
   applyGroupVisibility();
   renderAll();
   window.addEventListener('resize',()=>{
+    _typoToken++;   // [v2.2.1] panel boxes changed -> recompute the typography floor
     if(activeTab===5)animRenderFrame(animState.step,animState.tick/Math.max(1,Math.round(240/animState.speed)),animState.gt);
     else if(activeTab===8){chaosResizeCanvases();chaosRenderFrame();}
     else renderAll();
@@ -5262,7 +5370,7 @@ window.addEventListener('load',()=>{
             color:var(--dim);letter-spacing:.04em;display:flex;
             justify-content:space-between;gap:12px;flex-wrap:wrap;">
   <span>Model &amp; implementation: Tatai László — laszlo.tatai@outlook.com — Thermodynamic Manifold (TMF) project · CC BY 4.0 (please keep this line if you reuse or fork)</span>
-  <span style="color:#3d5268">v2.2 · scope &amp; limitations: FullChain_audit.md</span>
+  <span style="color:#6b86a0">v2.2 · scope &amp; limitations: FullChain_audit.md</span>
 </div>
 <!-- ── NARROW-VIEWPORT NOTICE ──
      This is a fixed-layout engineering dashboard: a 220 px control column plus

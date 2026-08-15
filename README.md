@@ -6,7 +6,7 @@ Live demos (once GitHub Pages is enabled on this repo):
 
 TMF_Rankine_Simulator_v32.html — steam power cycle (boiler, turbine, condenser, pump)
 TMF_OttoDiesel_Simulator_v33.html — Otto & Diesel air-standard cycles, with a forced-induction / charge-air-cooling module
-TMF_FullChain_Simulator_v19.html — a full biomass plant: combustion → boiler → Rankine turbine → generator, in one connected pipeline
+TMF_FullChain_Simulator_v22.html — a full biomass plant: combustion → boiler → Rankine turbine → generator, in one connected pipeline
 
 Open index.html for a landing page linking all three.
 
@@ -35,13 +35,61 @@ matters. If you want the classical cycle back, set the σ sliders to minimum.
 
 Tab 12 draws the cycle in (s, T, ΣS_gen), where it is a helix whose pitch is the
 entropy generated per revolution, alongside a Gouy–Stodola exergy-destruction
-breakdown. That breakdown holds regardless of the conjecture: at default settings
-heat crossing the flame-to-steam gap destroys 70.8% of all work capacity lost —
-207 kW against 206 kW of electrical output — while the turbine accounts for 16%.
+breakdown.
 
-Its scope, limitations, complete assumption register and a blunt list of known
-inconsistencies are in `FullChain_audit.md` — read §2.6 and §2.7 before quoting
-any number from it.
+Tab 13 goes one step further back, to the part the model could not previously
+see at all. Combustion — turning ordered chemical free energy into random thermal
+motion in one step — destroys **47% of the fuel's exergy before any heat transfer
+happens**: 501 kW against the plant's 207 kW of electrical output, and more than
+double the boiler's temperature gap. No better boiler, turbine or generator
+touches it. The same tab shows why you may not simply cool the stack to recover
+what is left: the limit is the fuel's chlorine, not thermodynamics. Wood chip
+allows 99 kW of recovery, straw only 44 kW, with identical hardware. And it
+closes the loop that the sensitivity view opened — sending ~14 kW of otherwise
+wasted stack heat to a fuel dryer returns ~14 kW of electricity, because drying
+needs no exergy and dry fuel is the highest-payback lever in the plant.
+
+As of v2.0 combustion efficiency runs on the Siegert stack-loss correlation, so
+excess air and flue-gas temperature finally affect the energy balance — λ was a
+dead control through v1.9.
+
+**v2.2 corrected the heat-transfer network and the correction inverted the
+conclusion.** Radiation and convection are two *parallel* paths from the gas to
+the wall; only the wall conduction is in series with them. Through v2.1 the model
+summed all three. The old sum overstated total resistance by **6.39×** and named
+the wrong mechanism as dominant: the series view said "radiation, 82 % of
+resistance", the correct circuit gives **84 % of the heat flux through
+convection**. Both are still displayed side by side so you can audit the change.
+Alongside the impedances the panel now shows the transfer *rates* — h per route,
+flux share, and wall response times (τ_rad 39.8 s, τ_conv 7.6 s, τ_cond 0.62 s) —
+because how fast one energy form becomes another says as much as how hard it is.
+The panel's own summary of the corrected picture: **energy does not choose a
+route, it takes both, split by conductance.**
+
+v2.2 also adds the **Curzon–Ahlborn** benchmark — efficiency at maximum power,
+1 − √(T_c/T_h). This plant runs at 32.3 % against a Curzon–Ahlborn point of
+22.2 % and a Carnot bound of 39.5 %: it is deliberately tuned above maximum
+power, trading output for efficiency, which is the right call when fuel is bought
+and capacity is not.
+
+**Read this before quoting a number:**
+
+- `TMF_WhitePaper_v1_0.md` — the technical *and* theoretical summary. Abstract,
+  executive summary, model architecture, a translation table mapping every TMF
+  term onto its canonical thermodynamics equivalent (eleven of twelve rows are
+  renamings — that ratio is the honest summary of this work), the falsifiability
+  argument, verification results, limitations, and APA references **with a
+  verification-status column** distinguishing citations that were checked from
+  those that were not. Three attributions turned out to be unverified or wrong
+  and are corrected there.
+- `FullChain_audit.md` — scope, limitations, the complete assumption register and
+  a blunt list of known inconsistencies. Read §2.6 and §2.7.
+
+One known defect is worth naming here rather than burying: the furnace heat flux
+computes to **2 348 kW/m²** against a realistic 100–300. The cause is identified
+(a water-side heat-transfer coefficient applied to the gas side) and it is
+flagged in red on the panel — and deliberately **not** silently fixed, because
+finding it teaches more than being spared it. See audit §2.6 item 13.
 
 What makes these different from a typical cycle-diagram demo
 Real property data, not textbook shortcuts: IAPWS-IF97 steam tables (Rankine), NASA 7-coefficient polynomials for N₂/O₂/H₂O/CO₂/Ar (Otto/Diesel) — so specific heat actually varies with temperature instead of being held constant.
@@ -56,10 +104,16 @@ The Full Chain simulator ships its verification harness so you can re-run it, an
 
 ```
 npm i playwright && npx playwright install chromium
-node FullChain_verify_v19.js
+node FullChain_verify_v22.js
 ```
 
-It sweeps 13 316 cycle states for Carnot-bound violations (0), checks second-law consistency and cycle closure, verifies the property tables against published IAPWS values, and stress-tests the log's hash chain. What it asserts is listed in `FullChain_audit.md` §4.
+It sweeps 13 316 cycle states for Carnot-bound violations (0), re-sweeps 7 920 with the σ-conjecture active (also 0), checks second-law consistency and cycle closure, verifies the property tables against published IAPWS values, and stress-tests the log's hash chain — 19 checks in all. What it asserts is listed in `FullChain_audit.md` §4.
+
+A second script regenerates every table in the white paper straight out of the shipped file, so no figure in it was typed by hand:
+
+```
+node harvest_paper.js
+```
 
 # Found a problem?
 

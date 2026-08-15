@@ -1,4 +1,4 @@
-# TMF Full Chain Analyser v1.7 — audit, scope & limitations
+# TMF Full Chain Analyser v2.2 — audit, scope & limitations
 
 **Scope & Limitations, assumption register, and verified invariants.**
 
@@ -7,12 +7,22 @@ weak points quickly. It is deliberately blunt about what is unproven. If you
 only read one section, read **§2 Scope & Limitations** — it lists what this tool
 is *not*, which is where most misreadings would start.
 
-- Artefact: `TMF_FullChain_Simulator_v19.html` — single file, no build step, no network
+- Artefact: `TMF_FullChain_Simulator_v22.html` — single file, no build step, no network
   dependency except a Google Fonts stylesheet (the app works offline without it).
 - Author of the model: Tatai László, 2026. Project: Thermodynamic Manifold (TMF).
 - Lineage: v1.5 → v1.6 (14 defect fixes) → v1.7 (Rankine core replaced with the
-  separately validated `TMF_Rankine_Simulator_v32` implementation). Inline
-  `[FIX v1.6]` / `[FIX v1.7]` comments state what each change was and why.
+  separately validated `TMF_Rankine_Simulator_v32` implementation) → v1.8
+  (sensitivity, OTDD marked) → v1.9 (σ-coupling made load-bearing, trajectory)
+  → v2.0 (Siegert, flue gas / recovery) → v2.1 (tab groups, treatment train)
+  → v2.2 (heat-transfer network topology corrected, transfer rates,
+  Curzon–Ahlborn benchmark). Inline `[FIX v1.6]` / `[FIX v1.7]` / `[v2.2]`
+  comments state what each change was and why.
+- Companion document: `TMF_WhitePaper_v1_0.md` — the technical and theoretical
+  summary, including the TMF→canonical translation table, the falsifiability
+  argument, and a reference list with an explicit verification-status column.
+  **Read the white paper's §13 before citing any reference that appears in this
+  code**; three attributions were found to be unverified or wrong and are
+  corrected there.
 
 ---
 
@@ -42,7 +52,8 @@ A **steady-state, single-point design explorer** for a small biomass-fired
 Rankine plant (nominal ~200 kW electrical), plus an instrumentation layer:
 thermodynamic impedance matching, an acoustic resonance model, a composite
 "chaos" health metric, a hash-chained data log, and a marginal-gain sensitivity
-view that ranks every lever by what it is actually worth at the terminals.
+view that ranks every lever by what it is actually worth at the terminals, and a
+flue-gas / recovery analysis with a full fuel exergy cascade.
 
 It is intended for **exploring parameter sensitivity and for arguing about the
 TMF hypothesis**. Numbers are self-consistent to within the assumptions listed
@@ -161,13 +172,29 @@ Verified after the change: 7 920-case sweep with the penalty live gives 0 Carnot
 violations, 0 cases of η_TMF exceeding the classical reference, and 0
 fixed-point convergence failures.
 
-**2. Excess air λ has no effect on efficiency.**
+**2. ~~Excess air λ has no effect on efficiency.~~ RESOLVED in v2.0.**
 
-`η_comb` depends only on fuel moisture. In reality more excess air means more
-mass to heat and a larger stack loss, so η_comb should fall with λ. In the model
-λ changes the flame temperature and the flue-gas temperature but not the
-efficiency, so the Sensitivity tab correctly reports 0.00 kW for it. A stack-loss
-term (Siegert-type) would fix this.
+`η_comb` now runs on the Siegert stack-loss correlation, the standard field
+method built into flue-gas analysers:
+
+```
+q_A = (T_fg − T_air) · ( A / (21 − O₂) + B ),    O₂ [%] = 21 · (1 − 1/λ)
+```
+
+with per-fuel A and B `[NUMERICAL]`, plus explicit casing (1.5%) and unburnt
+(1.0% + a moisture term) losses instead of one fudge factor. Excess air and
+flue-gas temperature now affect the energy balance, as they must:
+
+| λ | O₂ | stack loss | η_comb |
+|---|---|---|---|
+| 1.05 | 1.0% | 9.25% | 88.25% |
+| 1.20 | 3.5% | 10.06% | 87.44% |
+| 1.80 | 9.3% | 13.31% | 84.19% |
+| 2.50 | 12.6% | 17.14% | 80.36% |
+
+The Sensitivity tab now reports +1.23 kW for a −0.10 step in λ, where it
+previously reported 0.00. Air preheat via the `T_air` slider also does something
+now, for the same reason.
 
 **3. `uphtt_eta` is displayed but never used.**
 
@@ -204,6 +231,15 @@ than removing the tab.
 It is the same steady state re-evaluated at animation rate. Nothing in the model
 evolves in time.
 
+**9a. The treatment train is a sequencing model, not a process simulator.**
+
+Tab 13's stage train has no pressure drop, no mass-transfer kinetics, no
+particulate stage, and no residence-time effects. Removal efficiencies (88% dry
+sorbent, 97% wet) are typical published ranges, not vendor guarantees. It exists
+to show that stage ORDER decides how much heat survives — put an economiser
+downstream of a scrubber and it recovers 4 kW instead of 99 — and it should not
+be used to size anything.
+
 **9. No mobile layout.**
 
 Fixed 220 px control column plus dense panels at 7–9 px type. Below ~900 px a
@@ -216,6 +252,67 @@ efficiency" appear side by side, and they cost wildly different amounts of money
 The tool cannot tell you which is the better investment, only which produces more
 kilowatts.
 
+
+**11. The model still starts downstream of the largest irreversibility — but it
+now shows it.**
+
+Through v1.9 the chain began at `Q_in = m_fuel · LHV`, i.e. it treated the fuel's
+*chemical* energy as if it were already heat. Combustion converts highly ordered
+chemical free energy into random thermal motion in a single step and, at the
+default operating point, destroys **501 kW — 47.3% of the fuel's exergy** before
+any heat transfer takes place. That is more than double the boiler's temperature
+gap (208 kW) and more than the plant's entire electrical output (207 kW).
+
+v2.0 computes and displays this on tab 13, and the cascade closes to within 0.2%.
+But the *cycle* still begins from Q_in: the combustion irreversibility is
+reported, not modelled from reaction thermodynamics. A proper treatment would
+need the products' composition and Gibbs free energies, which this tool does not
+carry. So the number is a correct bookkeeping estimate with a stated β bracket
+(X_chem ≈ 1.10–1.20 · LHV), not a first-principles result.
+
+The engineering consequence is worth stating plainly: no improvement to the
+boiler, turbine or generator touches that 501 kW. Only a different conversion
+route does — which is the actual argument for fuel cells, and the reason a
+combustion plant's second-law efficiency sits near 19.5% while its first-law
+efficiency looks like 22.5%.
+
+**12. The heat-transfer network was wired in series and should have been a
+circuit. [FIXED v2.2 — and the fix inverted the conclusion.]**
+
+Through v2.1 the impedance panel summed all three resistances:
+`Z = Z_rad + Z_conv + Z_cond`. Radiation and convection are two *parallel* paths
+from the same gas to the same wall; only the wall conduction is in series with
+them. Correct circuit: `Z_gas = (1/Z_rad + 1/Z_conv)⁻¹`, `Z_total = Z_gas + Z_cond`.
+
+The old sum overstated total resistance by **6.39×** (3.163e-3 vs 4.947e-4 K/W)
+and — worse — reported the wrong mechanism as dominant. The series view said
+"radiation, 82% of resistance"; the correct circuit gives **84% of the heat flux
+through convection**, because in a parallel circuit the *smallest* resistance
+carries the flux while in a series circuit the *largest* one sets the total.
+
+Both numbers are still displayed side by side so the change can be audited rather
+than taken on trust. Note that this defect was invited by the framework's own
+vocabulary — "which path does the energy choose" — and the on-panel text now says
+plainly: **energy does not choose a route, it takes both, split by conductance.**
+
+**13. The furnace heat flux is wrong by roughly an order of magnitude, and has
+been left wrong on purpose. [OPEN — flagged in red on the panel]**
+
+`q_flux = (T_flame − T_boil)/Z_total ≈ 2 348 kW/m²`. A real furnace waterwall runs
+at **100–300 kW/m²**. The cause is identified, not mysterious: `h_straight =
+1500 W/m²K` (2 025 after the Dean curvature correction) is a **water-side**
+boiling coefficient applied to the **gas** side, where a furnace gas film is
+nearer **30–80 W/m²K**.
+
+Correcting it would shrink the convective branch by 25–60×, which would restore
+radiation to dominance and reverse issue 12's conclusion a second time.
+
+It has not been corrected. It is the single most common mistake in heat-transfer
+network modelling — taking a coefficient from the wrong side of a wall — and a
+reader who finds it by inspection has learned more than one who is handed the
+corrected number. Anyone building on this file should fix it before using the
+impedance panel quantitatively. This entry exists so that nobody mistakes it for
+an oversight.
 
 ### 2.7 The trajectory tab (tab 12) — what it is and is not claiming
 
@@ -357,7 +454,7 @@ S = P/cos φ in the copper term.
 
 ## 4. Verified invariants
 
-These are machine-checked in `FullChain_verify_v19.js` (headless Chromium). Re-run it to
+These are machine-checked in `FullChain_verify_v22.js` (headless Chromium). Re-run it to
 reproduce. Results at the time of writing:
 
 ### 4.1 η_classic never exceeds its Carnot bound — 13 316 cases, 0 violations
@@ -447,10 +544,10 @@ Ranked by how much a defect there would matter:
 
 ```
 node --check <extracted script>      # syntax
-node FullChain_verify_v19.js         # invariants + sweeps + screenshots
+node FullChain_verify_v22.js         # invariants + sweeps + screenshots
 ```
 
-`FullChain_verify_v19.js` needs Playwright and a Chromium binary. It loads the HTML from a
+`FullChain_verify_v22.js` needs Playwright and a Chromium binary. It loads the HTML from a
 `file://` URL, runs the sweeps in-page, and prints JSON. Everything it asserts
 is listed in §4; add your own checks to the same file.
 

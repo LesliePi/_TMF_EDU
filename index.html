@@ -40,6 +40,17 @@
     display:inline-block; margin-top:16px; font-family:'IBM Plex Mono',monospace;
     font-size:12px; color:var(--cyan);
   }
+  .docs{
+    margin-top:44px; max-width:760px; background:var(--bg2);
+    border:1px solid var(--border); border-radius:10px; padding:22px 26px;
+    font-size:13px; color:var(--dim); line-height:1.7;
+  }
+  .docs-h{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--yellow);
+    letter-spacing:0.08em; text-transform:uppercase; margin-bottom:12px;
+  }
+  .docs a{color:var(--cyan); text-decoration:none; font-family:'IBM Plex Mono',monospace;}
+  .docs a:hover{text-decoration:underline;}
   footer{
     margin-top:60px; text-align:center; font-size:11px; color:var(--dim);
     letter-spacing:0.02em; max-width:600px; line-height:1.7;
@@ -76,8 +87,8 @@
       boost) — includes a worked example on cooling vs. T₃/NOx trade-offs.</p>
       <span class="go">→ open simulator</span>
     </a>
-    <a class="card" href="TMF_FullChain_Simulator_v19.html">
-      <div class="tag">Full chain · v1.9</div>
+    <a class="card" href="TMF_FullChain_Simulator_v22.html">
+      <div class="tag">Full chain · v2.2</div>
       <h2>Biomass Plant — Combustion to Grid</h2>
       <p>The whole chain in one pipeline: combustion → boiler → Rankine turbine →
       generator. Includes a marginal-gain view that ranks every lever by what it
@@ -85,6 +96,20 @@
       survives the chain. Same IAPWS-IF97 core as the Rankine simulator.</p>
       <span class="go">→ open simulator</span>
     </a>
+  </div>
+
+  <div class="docs">
+    <div class="docs-h">Read before quoting a number</div>
+    <a href="TMF_WhitePaper_v1_0.md">TMF_WhitePaper_v1_0.md</a>
+    <span>— technical &amp; theoretical summary: abstract, executive summary, the
+    translation table mapping every TMF term onto its canonical thermodynamics
+    equivalent, the falsifiability argument, and APA references with an explicit
+    verification-status column.</span>
+    <br>
+    <a href="FullChain_audit.md">FullChain_audit.md</a>
+    <span>— scope, limitations, assumption register, and a blunt list of known
+    inconsistencies including one order-of-magnitude defect left in place on
+    purpose and flagged in red on the panel.</span>
   </div>
 
   <footer>

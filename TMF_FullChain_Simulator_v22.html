@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TMF — Full Thermodynamic Chain Analyser v2.2</title>
+<title>TMF — Full Thermodynamic Chain Analyser v2.2.2</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
 
@@ -291,7 +291,7 @@ textarea.json-input:focus{border-color:var(--teal);}
 <div class="hdr">
   <div class="hdr-left">
     <div class="hdr-sub">Thermodynamic Manifold Framework · UPHTT · Integrated Chain Analyser</div>
-    <h1><span>TMF</span> — Full Thermodynamic Chain Analyser <span style="color:var(--green);font-size:11px">v2.2</span></h1>
+    <h1><span>TMF</span> — Full Thermodynamic Chain Analyser <span style="color:var(--green);font-size:11px">v2.2.2</span></h1>
   </div>
   <div class="flow-arrow">
     <span class="fa-box" style="border-color:var(--c1);color:var(--c1)">COMBUSTION</span>
@@ -829,6 +829,14 @@ let P = {
   P_nom_kw:200, eta_gen:0.93, cos_phi:0.92, slip:0.025,
   pipe12:false, pipe23:false, pipe34:false,
   // ── IMPEDANCE PARAMETERS [v1.3] ──
+  // ── FURNACE RADIATION & GAS FILM [v2.2.1] ──
+  // Every one of these is an EXPLICIT INPUT with a stated literature range, not
+  // a fitted correlation. See calcImpedance() for why.
+  eps_gas:0.30,          // gas emissivity — look up on a Hottel/Leckner chart for your p·L and T
+  eps_wall:0.80,         // wall emissivity — oxidised/sooted steel
+  h_gas:60,              // gas-side convective film [W/m²K]
+  furn_V:1.5,            // furnace volume [m³]
+  furn_A:7.25,           // furnace enclosing surface [m²]
   imp_branches:4,        // number of parallel boiler tubes
   imp_scaling:'murray',  // 'leonardo' (2nd) | 'murray' (3rd)
   imp_taper:'conical',   // 'conical' | 'step'
@@ -844,10 +852,10 @@ let P = {
 // value (HHV = LHV + latent heat of the water formed from that hydrogen) and the
 // flue-gas water dew point.
 const FUELS = {
-  wood_chip:{name:'Wood chip', LHV_dry:18.5, H_pct:6.0, sieg_A:0.74, sieg_B:0.0090, mc_opt:[12,18], ash_T:1200, Cl_pct:0.02, lambda_ratio:2.5, color:'#00d4ff'},
-  straw:    {name:'Straw / agri', LHV_dry:17.2, H_pct:5.5, sieg_A:0.76, sieg_B:0.0095, mc_opt:[10,14], ash_T:780, Cl_pct:0.35, lambda_ratio:3.1, color:'#ffd166'},
-  pellet:   {name:'Pellet / briquette', LHV_dry:19.0, H_pct:6.2, sieg_A:0.73, sieg_B:0.0088, mc_opt:[6,10], ash_T:1100, Cl_pct:0.08, lambda_ratio:2.0, color:'#00e896'},
-  biogas:   {name:'Biogas (CH₄~60%)', LHV_dry:21.5, H_pct:11.0, sieg_A:0.66, sieg_B:0.0090, mc_opt:[0,2], ash_T:null, Cl_pct:0.001, lambda_ratio:1.0, color:'#d500f9'},
+  wood_chip:{name:'Wood chip', LHV_dry:18.5, H_pct:6.0, C_pct:50.0, sieg_A:0.74, sieg_B:0.0090, mc_opt:[12,18], ash_T:1200, Cl_pct:0.02, lambda_ratio:2.5, color:'#00d4ff'},
+  straw:    {name:'Straw / agri', LHV_dry:17.2, H_pct:5.5, C_pct:47.0, sieg_A:0.76, sieg_B:0.0095, mc_opt:[10,14], ash_T:780, Cl_pct:0.35, lambda_ratio:3.1, color:'#ffd166'},
+  pellet:   {name:'Pellet / briquette', LHV_dry:19.0, H_pct:6.2, C_pct:50.0, sieg_A:0.73, sieg_B:0.0088, mc_opt:[6,10], ash_T:1100, Cl_pct:0.08, lambda_ratio:2.0, color:'#00e896'},
+  biogas:   {name:'Biogas (CH₄~60%)', LHV_dry:21.5, H_pct:11.0, C_pct:45.0, sieg_A:0.66, sieg_B:0.0090, mc_opt:[0,2], ash_T:null, Cl_pct:0.001, lambda_ratio:1.0, color:'#d500f9'},
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1619,7 +1627,8 @@ function _hashParams(){
   return [P.fuel,P.mc,P.m_fuel,P.lambda,P.T_air,P.T_boil,P.T_sh,P.eta_boil,
     P.cond_geo,P.T_cond,P.eta_turb,P.eta_pump,P.sig_T,P.sig_rho,P.sig_v,
     P.P_nom_kw,P.eta_gen,P.cos_phi,P.slip,P.pipe12,P.pipe23,P.pipe34,
-    P.imp_branches,P.imp_scaling,P.imp_taper].join('|');
+    P.imp_branches,P.imp_scaling,P.imp_taper,
+    P.eps_gas,P.eps_wall,P.h_gas,P.furn_V,P.furn_A].join('|');
 }
 
 function runPipeline(){
@@ -1792,10 +1801,73 @@ function calcImpedance(comb, boil){
   const T_fg_K    = comb.T_fg + 273.15;
   const sigma_SB  = 5.67e-8; // Stefan-Boltzmann [W/m²K⁴] [PROVEN]
 
-  // ── 1. RADIATION IMPEDANCE Z_rad [PROVEN — Stefan-Boltzmann] ──
-  // Z_rad = 1 / (σ·ε·(T_flame⁴ − T_wall⁴) / (T_flame − T_wall))
-  // Linearized around operating point for dimensional consistency
-  const eps_flame = 0.85; // emissivity of combustion gas [NUMERICAL]
+  // ══════════════════════════════════════════════════════════════════
+  //  FURNACE GEOMETRY — MEAN BEAM LENGTH [v2.2.1]
+  //
+  //  Gas radiation is VOLUMETRIC, not a surface property: CO₂ and H₂O radiate
+  //  in bands, and how much a gas volume emits depends on how far the radiation
+  //  travels through it. Hottel's mean beam length collapses an arbitrary
+  //  enclosure to one equivalent path:
+  //
+  //      L = 3.6 · V / A          [PROVEN — Hottel's standard approximation,
+  //                                i.e. 0.9 × 4V/A for an arbitrary enclosure]
+  //
+  //  This is the honest geometry link. Note what it implies and what it does
+  //  NOT. It says: shape enters radiation ONLY through the surface-to-volume
+  //  ratio. It does not say anything about how the gas flows, and this model
+  //  cannot — a flow field needs CFD, not a resistance network.
+  //
+  //  Residence time is V/V̇ and therefore depends on VOLUME ALONE. At fixed
+  //  volume a cone, a cylinder and a sphere all hold the gas for exactly the
+  //  same time. Shape changes A, hence L, hence emissivity — nothing else here.
+  // ══════════════════════════════════════════════════════════════════
+  const furn_V = Math.max(0.05, P.furn_V||1.5);
+  const furn_A = Math.max(0.5,  P.furn_A||7.25);
+  const L_beam = 3.6*furn_V/furn_A;                    // m [PROVEN — Hottel]
+
+  // Partial pressures of the radiating species, from the actual fuel and λ.
+  // Same molar bookkeeping the dew-point routine uses, extended with carbon.
+  const _fe = fuelEnergy();
+  const _mW = P.m_fuel*(_fe.mc+_fe.w_comb*(1-_fe.mc));            // kg/s water
+  const _mFG= P.m_fuel*(1+P.lambda*6.5);
+  const _mD = Math.max(1e-9,_mFG-_mW);
+  const _nW = _mW/0.018, _nD = _mD/0.029;
+  const _C  = (FUELS[P.fuel].C_pct||50)/100;
+  const _nC = P.m_fuel*(1-_fe.mc)*_C/0.012;                        // mol/s CO₂
+  const _nT = _nW+_nD;
+  const x_CO2 = _nC/_nT, x_H2O = _nW/_nT;
+  const pL = (x_CO2+x_H2O)*1.01325*L_beam;                         // bar·m
+
+  // ══════════════════════════════════════════════════════════════════
+  //  1. RADIATION IMPEDANCE Z_rad
+  //
+  //  [FIX v2.2.1 — the emissivity was wrong, and wrong in a way that hid a
+  //  second error.] v2.2 and earlier hard-coded eps_flame = 0.85. Working
+  //  backwards from the resulting h_rad = 386 W/m²K gives an implied gas
+  //  emissivity of 0.88 — a furnace gas that radiates almost like a black body.
+  //  Real CO₂/H₂O combustion gas at these partial pressures and beam lengths
+  //  sits at 0.2–0.4. So radiation was overstated by roughly 2.5–4×, which
+  //  partially masked how badly overstated the convective film was (see §2).
+  //
+  //  WHY THERE IS NO EMISSIVITY CORRELATION HERE. The defensible way to compute
+  //  ε from p·L and T is Hottel's charts, Leckner's (1972) correlation, or a
+  //  weighted-sum-of-gray-gases fit such as Smith, Shen & Friedman (1982).
+  //  Their coefficient tables were not obtainable from an open source during
+  //  this work, and a plausible-looking absorption coefficient invented to fill
+  //  the gap would be exactly the kind of number this project refuses to ship.
+  //  So ε stays an EXPLICIT INPUT: the model computes p·L for you and tells you
+  //  where to read ε off a chart. Everything downstream of ε is exact algebra.
+  //
+  //  Given ε, the linearised coefficient is an identity, not an approximation:
+  //      h_rad ≡ q_rad/(T_g − T_w) = ε_eff·σ·(T_g⁴ − T_w⁴)/(T_g − T_w)
+  //
+  //  Gas-in-enclosure with a gray wall uses Hottel's (ε_w+1)/2 effective-wall
+  //  factor [NUMERICAL — a standard engineering approximation, not exact].
+  // ══════════════════════════════════════════════════════════════════
+  const eps_gas   = Math.min(0.95,Math.max(0.05,P.eps_gas??0.30));  // [NUMERICAL — user input]
+  const eps_wall  = Math.min(0.99,Math.max(0.30,P.eps_wall??0.80)); // [NUMERICAL — user input]
+  const eps_eff   = eps_gas*(eps_wall+1)/2;                         // [NUMERICAL — Hottel gray wall]
+  const eps_flame = eps_eff;
   const T_wall_K  = T_boil_K + 50; // furnace wall slightly above boiler temp [NUMERICAL]
   // [FIX v1.6] If T_flame ≤ T_wall — reachable with low fuel flow, high λ, or a
   // high T_boil setting — the numerator AND q_rad both go negative. v1.5 clamped
@@ -1811,9 +1883,29 @@ function calcImpedance(comb, boil){
   // ── 2. CONVECTION IMPEDANCE Z_conv [PROVEN — Newton's law of cooling] ──
   // h_conv = Nu·k/L; for turbulent spiral flow (UPHTT) vs straight tube
   // Nu_helical ≈ Nu_straight × (1 + 3.5·d/D_coil) [PROVEN — Dittus-Boelter + Dean]
-  const h_straight = 1500; // W/m²K baseline convective coefficient [NUMERICAL]
-  const dean_factor = P.cond_geo === 'helical' ? 1.35 : 1.0; // UPHTT spiral bonus [NUMERICAL]
-  const h_conv    = h_straight * dean_factor;
+  // ══════════════════════════════════════════════════════════════════
+  //  [FIX v2.2.1 — this was a coefficient from the wrong side of the wall.]
+  //
+  //  v2.2 and earlier used h_straight = 1500 W/m²K. That is a WATER-SIDE
+  //  boiling coefficient. It was being applied to the GAS side, where a furnace
+  //  gas film is 10–80 W/m²K. Overstated by a factor of 20–150.
+  //
+  //  Together with the emissivity error above, the two produced q ≈ 2348 kW/m²
+  //  against a real furnace waterwall's 100–300 — and, because they pulled in
+  //  opposite directions on the flux SHARE, they made convection look dominant
+  //  in a furnace where radiation carries roughly two thirds to three quarters.
+  //
+  //  Both are now explicit inputs. The old values remain reachable at the top of
+  //  their slider ranges, labelled, so the defect can still be demonstrated.
+  //
+  //  The Dean factor applies to flow INSIDE a curved tube (Dean 1927). Whether
+  //  it should be applied to a furnace-side gas film at all is questionable; it
+  //  is retained only for the helical setting and flagged. [NUMERICAL]
+  // ══════════════════════════════════════════════════════════════════
+  const h_gas_in  = Math.max(5,Math.min(2025,P.h_gas??60));  // [NUMERICAL — user input]
+  const dean_factor = P.cond_geo === 'helical' ? 1.35 : 1.0; // [NUMERICAL — see note]
+  const h_conv    = h_gas_in * dean_factor;
+  const h_straight= h_gas_in;
   const Z_conv    = 1 / h_conv; // m²K/W
 
   // ── 3. CONDUCTION IMPEDANCE Z_cond [PROVEN — Fourier] ──
@@ -1847,12 +1939,18 @@ function calcImpedance(comb, boil){
   const h_rad     = 1/Z_rad;
   const flux_rad  = h_rad/(h_rad+h_conv);
   const flux_conv = h_conv/(h_rad+h_conv);
-  // Resistance shares of the real circuit
+  // Resistance shares of the real circuit. These two are the ONLY additive
+  // decomposition: Z_gas + Z_cond = Z_total, in series.
   const Z_gas_pct  = Z_gas  / Z_total;
   const Z_cond_pct = Z_cond / Z_total;
-  // Legacy (series) shares, kept so the change is auditable
-  const Z_rad_pct  = Z_rad  / Z_series_legacy;
-  const Z_conv_pct = Z_conv / Z_series_legacy;
+  // [v2.2.2, roadmap item 4] Z_rad_pct and Z_conv_pct are REMOVED, not
+  // relabelled. They divided by Z_series_legacy while Z_gas_pct/Z_cond_pct
+  // divided by Z_total — four percentages against two denominators. But the
+  // deeper problem is that a "share of resistance" for two PARALLEL branches is
+  // not a meaningful quantity at all: parallel paths divide conductance, and
+  // that share is already carried, correctly, by flux_rad / flux_conv above.
+  // The legacy series sum itself survives as Z_series_legacy and stays on the
+  // panel in red, so the v2.1 defect remains auditable.
 
   // ── 4b. RATES — how fast each route actually moves energy [v2.2] ──
   // Impedance says how hard it is; this says how quickly the receiving metal
@@ -1971,9 +2069,11 @@ function calcImpedance(comb, boil){
 
   return {
     Z_rad, Z_conv, Z_cond, Z_total, Z_gas, Z_series_legacy,
-    Z_rad_pct, Z_conv_pct, Z_cond_pct, Z_gas_pct,
+    Z_cond_pct, Z_gas_pct,
     h_rad, flux_rad, flux_conv, tau_rad, tau_conv, tau_cond, q_flux, alpha_steel,
     h_conv, dean_factor, wall_t, lambda_steel,
+    // furnace radiation inputs & geometry [v2.2.1]
+    eps_gas, eps_wall, eps_eff, furn_V, furn_A, L_beam, pL, x_CO2, x_H2O, h_gas_in,
     N_branches, d0, d_branch_ideal, d_branch_actual, rad_inverted,
     scaling, mismatch, delta_S, eta_entr, eta_taper, eta_imp,
     node_status, thermo_acoustic, taper_mode,
@@ -2464,54 +2564,121 @@ function drawImpedance(c, b, imp){
   // ── PANEL 1: the real circuit, its flux split, and its speeds ──
   const s1=clearSvg('svg-imp-breakdown');
   txt(s1,8,13,'HEAT-TRANSFER CIRCUIT — RESISTANCE, FLUX SHARE, RESPONSE TIME',{fill:'#6b86a0','font-size':'7.5','letter-spacing':'.08em'});
-  // circuit sketch: two parallel routes then the wall
-  const cx0=30, cy0=44, lw=150;
-  txt(s1,cx0-14,cy0+16,'gas',{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
-  s1.appendChild(svgEl('line',{x1:cx0,y1:cy0+13,x2:cx0+18,y2:cy0+13,stroke:'#6b86a0','stroke-width':'1'}));
-  [['Radiation',imp.flux_rad,'#ff7043',0],['Convection',imp.flux_conv,'#00e5ff',26]].forEach(function(r){
+  // circuit sketch: two parallel routes then the wall  [v2.2.2 tightened to make
+  // room for the ladder below — geometry only, nothing computed changed]
+  const cx0=30, cy0=36, lw=150;
+  txt(s1,cx0-14,cy0+24,'gas',{fill:'#6b86a0','font-size':'7','text-anchor':'end'});
+  s1.appendChild(svgEl('line',{x1:cx0,y1:cy0+20,x2:cx0+18,y2:cy0+20,stroke:'#6b86a0','stroke-width':'1'}));
+  [['Radiation',imp.flux_rad,'#ff7043',0],['Convection',imp.flux_conv,'#00e5ff',22]].forEach(function(r){
     const y=cy0+r[3];
-    rect(s1,cx0+18,y,lw,20,r[2],0.20,2);
-    s1.appendChild(svgEl('rect',{x:cx0+18,y:y,width:lw,height:20,fill:'none',stroke:r[2],'stroke-width':'1.1',rx:'2'}));
-    txt(s1,cx0+18+lw/2,y+13,r[0]+'  '+(r[1]*100).toFixed(0)+'% of flux',{fill:r[2],'font-size':'7.5','text-anchor':'middle','font-weight':'700'});
+    rect(s1,cx0+18,y,lw,18,r[2],0.20,2);
+    s1.appendChild(svgEl('rect',{x:cx0+18,y:y,width:lw,height:18,fill:'none',stroke:r[2],'stroke-width':'1.1',rx:'2'}));
+    txt(s1,cx0+18+lw/2,y+12,r[0]+'  '+(r[1]*100).toFixed(0)+'% of flux',{fill:r[2],'font-size':'7.5','text-anchor':'middle','font-weight':'700'});
   });
-  s1.appendChild(svgEl('line',{x1:cx0+18+lw,y1:cy0+13,x2:cx0+18+lw+16,y2:cy0+13,stroke:'#6b86a0','stroke-width':'1'}));
-  rect(s1,cx0+18+lw+16,cy0+3,96,20,'#00e676',0.20,2);
-  s1.appendChild(svgEl('rect',{x:cx0+18+lw+16,y:cy0+3,width:96,height:20,fill:'none',stroke:'#00e676','stroke-width':'1.1',rx:'2'}));
-  txt(s1,cx0+18+lw+64,cy0+16,'Wall',{fill:'#00e676','font-size':'7.5','text-anchor':'middle','font-weight':'700'});
-  txt(s1,cx0+18+lw+118,cy0+16,'steam',{fill:'#6b86a0','font-size':'7'});
-  txt(s1,cx0+18+lw/2,cy0+62,'parallel — both routes carry heat at once',{fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
+  s1.appendChild(svgEl('line',{x1:cx0+18+lw,y1:cy0+20,x2:cx0+18+lw+16,y2:cy0+20,stroke:'#6b86a0','stroke-width':'1'}));
+  rect(s1,cx0+18+lw+16,cy0+11,96,18,'#00e676',0.20,2);
+  s1.appendChild(svgEl('rect',{x:cx0+18+lw+16,y:cy0+11,width:96,height:18,fill:'none',stroke:'#00e676','stroke-width':'1.1',rx:'2'}));
+  txt(s1,cx0+18+lw+64,cy0+23,'Wall',{fill:'#00e676','font-size':'7.5','text-anchor':'middle','font-weight':'700'});
+  txt(s1,cx0+18+lw+118,cy0+23,'steam',{fill:'#6b86a0','font-size':'7'});
+  txt(s1,cx0+18+lw/2,cy0+50,'parallel — both routes carry heat at once',{fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
 
-  // table: Z, h, flux share, tau
-  const rows=[
-    {l:'Radiation',   Z:imp.Z_rad,  h:imp.h_rad,  f:imp.flux_rad,  t:imp.tau_rad,  c:'#ff7043'},
-    {l:'Convection',  Z:imp.Z_conv, h:imp.h_conv, f:imp.flux_conv, t:imp.tau_conv, c:'#00e5ff'},
-    {l:'Wall (cond.)',Z:imp.Z_cond, h:1/imp.Z_cond, f:null,        t:imp.tau_cond, c:'#00e676'},
+  // ══ [v2.2.2] RESISTANCE LADDER — one horizontal log axis, replacing the
+  //    numeric table. Rationale (roadmap item 3): the three resistances differ
+  //    by two decades, and a log axis is the only honest way to show a RATIO.
+  //    τ is retired into the marker labels: on the two film paths
+  //    τ = ρ·c·t/h, so τ_rad/τ_conv ≡ Z_rad/Z_conv exactly — verified 0.6603 vs
+  //    0.6603. Only τ_cond carries independent information.
+  const LX0=40, LX1=470, LZMIN=-5, LZMAX=-1;
+  const lx = z => LX0 + (Math.log10(Math.max(1e-12,z))-LZMIN)/(LZMAX-LZMIN)*(LX1-LX0);
+  const AXY=157, LEGX=200;
+  txt(s1,8,100,'RESISTANCE LADDER — log₁₀ Z',{fill:'#6b86a0','font-size':'7','letter-spacing':'.08em'});
+  // The rad↔conv gap is 0.18 decades wide — no label fits between those two ticks,
+  // so h_conv/h_rad is reported up here rather than annotated in place. 1/Bi keeps
+  // its position because the cond↔gas gap is two decades wide and can carry it.
+  txt(s1,470,100,'span '+Math.log10(imp.Z_conv/imp.Z_cond).toFixed(2)+' decades · h_conv/h_rad '+(imp.h_conv/imp.h_rad).toFixed(2),
+      {fill:'#ffc400','font-size':'7','text-anchor':'end','font-weight':'700'});
+
+  // decade grid + axis
+  s1.appendChild(svgEl('line',{x1:LX0,y1:AXY,x2:LX1,y2:AXY,stroke:'#2a3648','stroke-width':'1'}));
+  for(let d=LZMIN; d<=LZMAX; d++){
+    const x=lx(Math.pow(10,d));
+    s1.appendChild(svgEl('line',{x1:x,y1:AXY-4,x2:x,y2:AXY+4,stroke:'#2a3648','stroke-width':'1'}));
+    txt(s1,x,171,'10'+String(d).replace('-','⁻').replace('1','¹').replace('2','²').replace('3','³').replace('4','⁴').replace('5','⁵'),
+        {fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
+  }
+
+  // Markers. The three gas-side values sit inside 0.4 decades, so their labels
+  // cannot go under their own ticks — they stack as a left-aligned legend with a
+  // leader line to each tick. The crowding is not a drawing problem: it IS the
+  // result. Z_gas is the PARALLEL RESULT of the two films, not a fourth path —
+  // drawn dashed so it cannot be mistaken for an independent resistance.
+  // h is deliberately NOT printed: on both film paths h ≡ 1/Z exactly, so it
+  // would be the same number twice.
+  const marks=[
+    {y:111, x:lx(imp.Z_conv), c:'#00e5ff', dash:false,
+     s:'Z_conv '+imp.Z_conv.toExponential(2)+' · τ '+imp.tau_conv.toFixed(0)+' s'},
+    {y:124, x:lx(imp.Z_rad),  c:'#ff7043', dash:false,
+     s:'Z_rad '+imp.Z_rad.toExponential(2)+' · τ '+imp.tau_rad.toFixed(0)+' s'},
+    {y:137, x:lx(imp.Z_gas),  c:'#ffc400', dash:true,
+     s:'Z_gas '+imp.Z_gas.toExponential(2)+' ‹parallel›'},
   ];
-  const hy=134;
-  ['','Z [m²K/W]','h [W/m²K]','flux','τ response'].forEach(function(t,i){
-    txt(s1,[14,150,238,318,412][i],hy,t,{fill:'#6b86a0','font-size':'6.5','letter-spacing':'.1em'});
+  marks.forEach(function(m){
+    s1.appendChild(svgEl('line',{x1:m.x,y1:AXY-10,x2:m.x,y2:AXY+10,stroke:m.c,'stroke-width':'1.8',
+      'stroke-dasharray':m.dash?'2 2':'none'}));
+    const el=txt(s1,LEGX,m.y,m.s,{fill:m.c,'font-size':'7','font-weight':'700'});
+    let w=0; try{w=el.getBBox().width;}catch(e){w=140;}
+    // Leader is INSERTED BEFORE the label, not appended: when a slider re-orders
+    // the ladder (dial h_gas back to 2025 and Z_conv crosses under Z_rad) the
+    // leader has to run back under the legend, and it must pass BEHIND the
+    // glyphs rather than through them.
+    s1.insertBefore(svgEl('polyline',{points:(LEGX+w+4)+','+(m.y-3)+' '+m.x+','+(AXY-11),
+      fill:'none',stroke:m.c,'stroke-width':'0.7',opacity:'0.55'}), el);
   });
-  rows.forEach(function(r,i){
-    const y=hy+16+i*17;
-    txt(s1,14,y,r.l,{fill:r.c,'font-size':'8','font-weight':'700'});
-    txt(s1,150,y,r.Z.toExponential(2),{fill:'#c5d5e8','font-size':'7.5'});
-    txt(s1,238,y,r.h.toFixed(0),{fill:'#c5d5e8','font-size':'7.5'});
-    txt(s1,318,y,r.f===null?'—':(r.f*100).toFixed(0)+'%',{fill:r.c,'font-size':'7.5','font-weight':'700'});
-    txt(s1,412,y,r.t<1?r.t.toFixed(2)+' s':r.t.toFixed(1)+' s',{fill:'#ffc400','font-size':'7.5'});
-  });
+  // Z_cond stands alone two decades away — its label goes under its own tick.
+  s1.appendChild(svgEl('line',{x1:lx(imp.Z_cond),y1:AXY-10,x2:lx(imp.Z_cond),y2:AXY+10,
+    stroke:'#00e676','stroke-width':'1.8'}));
+  txt(s1,lx(imp.Z_cond),186,'Z_cond '+imp.Z_cond.toExponential(2)+' · τ '+imp.tau_cond.toFixed(2)+' s',
+      {fill:'#00e676','font-size':'7','text-anchor':'middle','font-weight':'700'});
+
+  // Gap annotations — each gap named by the dimensionless group that IS that gap.
+  // Bi is defined on the TOTAL external film, so 1/Bi = Z_gas/Z_cond, and the gap
+  // it names is cond ↔ Z_gas — NOT cond ↔ conv, as the roadmap text had it.
+  // [PROVEN] definition, not a fit.
+  txt(s1,270,186,'◄ 1/Bi = '+(imp.Z_gas/imp.Z_cond).toFixed(0)+' ►',
+      {fill:'#6b86a0','font-size':'6.5','text-anchor':'middle'});
+
+  // ══ linear stacked bar — the ADDITIVE budget. A log axis shows ratios and
+  //    cannot show a sum; this is the only decomposition that adds to Z_total.
+  // Bar is 14 units tall with the caption baseline at 204 so the underscores in
+  // "Z_gas"/"Z_total" clear the bottom border stroke instead of being erased by it.
+  const BX0=40, BW=360, gasW=BW*imp.Z_gas_pct;
+  rect(s1,BX0,196,gasW,14,'#ffc400',0.30,1);
+  s1.appendChild(svgEl('rect',{x:BX0,y:196,width:gasW,height:14,fill:'none',stroke:'#ffc400','stroke-width':'1'}));
+  rect(s1,BX0+gasW,196,Math.max(1.5,BW-gasW),14,'#00e676',0.45,1);
+  s1.appendChild(svgEl('rect',{x:BX0+gasW,y:196,width:Math.max(1.5,BW-gasW),height:14,fill:'none',stroke:'#00e676','stroke-width':'1'}));
+  txt(s1,BX0+gasW/2,204,'Z_gas '+(imp.Z_gas_pct*100).toFixed(1)+'% · Z_total = '+imp.Z_total.toExponential(2)+' m²K/W',
+      {fill:'#ffc400','font-size':'6.5','text-anchor':'middle','font-weight':'700'});
+  txt(s1,BX0+BW+6,204,'Z_cond '+(imp.Z_cond_pct*100).toFixed(1)+'%',{fill:'#00e676','font-size':'6.5','font-weight':'700'});
+
   // The resulting flux is itself a diagnostic. A biomass furnace runs at roughly
   // 100–300 kW/m2; anything far above that means h_conv is wrong for a GAS side.
   const fluxBad = imp.q_flux/1000 > 400;
-  txt(s1,14,hy+70,'Gas film '+(imp.Z_gas_pct*100).toFixed(0)+'% of total resistance · wall '+(imp.Z_cond_pct*100).toFixed(0)+'% · q ≈ '+(imp.q_flux/1000).toFixed(0)+' kW/m²'+(fluxBad?'  ⚠':''),
+  txt(s1,14,222,'Gas film '+(imp.Z_gas_pct*100).toFixed(0)+'% of total resistance · wall '+(imp.Z_cond_pct*100).toFixed(0)+'% · q ≈ '+(imp.q_flux/1000).toFixed(0)+' kW/m²'+(fluxBad?'  ⚠':''),
       {fill:fluxBad?'#ff1744':'#ff9100','font-size':'8','font-weight':'700'});
+  // [v2.2.2] item 4: the parallel branches divide CONDUCTANCE. "% of resistance"
+  // for Z_rad / Z_conv has no meaning in a parallel circuit — the two legacy
+  // percentages that expressed it are removed, not relabelled.
+  txt(s1,14,235,'Energy takes both routes at once — parallel branches divide CONDUCTANCE (flux '+(imp.flux_rad*100).toFixed(0)+'/'+(imp.flux_conv*100).toFixed(0)+'), not resistance.',{fill:'#6b86a0','font-size':'6.5'});
+  txt(s1,14,248,'⚠ [FIX v2.2] Series-summing all three gave Z = '+imp.Z_series_legacy.toExponential(2)+', 6.4× too high. See audit §2.6.',{fill:'#ff1744','font-size':'6.5'});
   if(fluxBad){
-    txt(s1,14,hy+128,'⚠ '+(imp.q_flux/1000).toFixed(0)+' kW/m² is far above a real furnace (100–300). h_straight = 1500 W/m²K looks like a',{fill:'#ff1744','font-size':'6.5'});
-    txt(s1,14,hy+138,'WATER-side coefficient applied to the GAS side; a furnace gas film is nearer 30–80. Flagged, not silently changed.',{fill:'#ff1744','font-size':'6.5'});
+    txt(s1,14,261,'⚠ '+(imp.q_flux/1000).toFixed(0)+' kW/m² is far above a real furnace (100–300). You are back in the v2.2 defect:',{fill:'#ff1744','font-size':'6.5'});
+    txt(s1,14,274,'a WATER-side film (h≈1500) and a near-black-body gas (ε≈0.85). Both were wrong; both are sliders now.',{fill:'#ff1744','font-size':'6.5'});
+  } else {
+    // ── Geometry → radiation, the honest link [v2.2.1] ──
+    txt(s1,14,261,'GEOMETRY → RADIATION   L = 3.6·V/A = '+imp.L_beam.toFixed(2)+' m · p·L = '+imp.pL.toFixed(3)+' bar·m · ε_eff = '+imp.eps_eff.toFixed(2),
+        {fill:'#00e5ff','font-size':'7','font-weight':'700'});
+    txt(s1,14,274,'ε is YOUR input, not a fitted correlation — read it off a Hottel/Leckner chart at this p·L and T.',{fill:'#6b86a0','font-size':'6.5'});
   }
-  txt(s1,14,hy+83,'Energy does not choose a route — it takes both, split by conductance. The slow one sets the',{fill:'#6b86a0','font-size':'6.5'});
-  txt(s1,14,hy+93,'thermal response: radiative loading needs '+imp.tau_rad.toFixed(0)+' s to move the wall, convective '+imp.tau_conv.toFixed(0)+' s, the wall itself '+imp.tau_cond.toFixed(1)+' s.',{fill:'#6b86a0','font-size':'6.5'});
-  txt(s1,14,hy+106,'⚠ [FIX v2.2] Earlier versions summed all three in series: Z = '+imp.Z_series_legacy.toExponential(2)+', 6.4× too high, and',{fill:'#ff1744','font-size':'6.5'});
-  txt(s1,14,hy+116,'reported "dominant: Z_rad 82%". With the correct circuit convection carries most of the flux. See audit §2.6.',{fill:'#ff1744','font-size':'6.5'});
 
   // ── PANEL 2: Geometric scaling — Leonardo vs Murray ──
   const s2=clearSvg('svg-imp-scaling');
@@ -3476,6 +3643,13 @@ function renderSidebar(){
     });
   }
   else if(activeTab===6){
+    addSec('FURNACE RADIATION');
+    addSlider('eps_gas','ε gas (CO₂+H₂O)',0.05,0.90,P.eps_gas,0.01,'',v=>{P.eps_gas=v;renderAll();});
+    addSlider('eps_wall','ε wall (steel)',0.30,0.99,P.eps_wall,0.01,'',v=>{P.eps_wall=v;renderAll();});
+    addSlider('h_gas','h gas film [W/m²K]',5,2025,P.h_gas,5,'',v=>{P.h_gas=v;renderAll();});
+    addSec('FURNACE GEOMETRY');
+    addSlider('furn_V','Volume V [m³]',0.2,20,P.furn_V,0.1,'m³',v=>{P.furn_V=v;renderAll();});
+    addSlider('furn_A','Surface A [m²]',1,80,P.furn_A,0.25,'m²',v=>{P.furn_A=v;renderAll();});
     addSec('NETWORK GEOMETRY');
     addSlider('imp_branches','Branch tubes (N)',1,10,P.imp_branches,1,'',v=>{P.imp_branches=Math.round(v);renderAll();});
     addSelect('imp_scaling','Scaling law',[['murray','Murray d³ (steam/viscous)'],['leonardo','Leonardo d² (low-viscosity)']],P.imp_scaling,v=>{P.imp_scaling=v;renderAll();});
@@ -5370,7 +5544,7 @@ window.addEventListener('load',()=>{
             color:var(--dim);letter-spacing:.04em;display:flex;
             justify-content:space-between;gap:12px;flex-wrap:wrap;">
   <span>Model &amp; implementation: Tatai László — laszlo.tatai@outlook.com — Thermodynamic Manifold (TMF) project · CC BY 4.0 (please keep this line if you reuse or fork)</span>
-  <span style="color:#6b86a0">v2.2 · scope &amp; limitations: FullChain_audit.md</span>
+  <span style="color:#6b86a0">v2.2.2 · scope &amp; limitations: FullChain_audit.md</span>
 </div>
 <!-- ── NARROW-VIEWPORT NOTICE ──
      This is a fixed-layout engineering dashboard: a 220 px control column plus

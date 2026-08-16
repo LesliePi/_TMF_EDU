@@ -1,4 +1,4 @@
-# TMF Full Chain Analyser v2.2 — audit, scope & limitations
+# TMF Full Chain Analyser v2.2.1 — audit, scope & limitations
 
 **Scope & Limitations, assumption register, and verified invariants.**
 
@@ -15,8 +15,10 @@ is *not*, which is where most misreadings would start.
   (sensitivity, OTDD marked) → v1.9 (σ-coupling made load-bearing, trajectory)
   → v2.0 (Siegert, flue gas / recovery) → v2.1 (tab groups, treatment train)
   → v2.2 (heat-transfer network topology corrected, transfer rates,
-  Curzon–Ahlborn benchmark). Inline `[FIX v1.6]` / `[FIX v1.7]` / `[v2.2]`
-  comments state what each change was and why.
+  Curzon–Ahlborn benchmark) → v2.2.1 (typography floor; BOTH furnace film
+  coefficients corrected — see §2.6 items 13–16 — and furnace geometry added via
+  Hottel's mean beam length). Inline `[FIX v1.6]` / `[FIX v1.7]` / `[v2.2]` /
+  `[v2.2.1]` comments state what each change was and why.
 - Companion document: `TMF_WhitePaper_v1_0.md` — the technical and theoretical
   summary, including the TMF→canonical translation table, the falsifiability
   argument, and a reference list with an explicit verification-status column.
@@ -295,24 +297,72 @@ than taken on trust. Note that this defect was invited by the framework's own
 vocabulary — "which path does the energy choose" — and the on-panel text now says
 plainly: **energy does not choose a route, it takes both, split by conductance.**
 
-**13. The furnace heat flux is wrong by roughly an order of magnitude, and has
-been left wrong on purpose. [OPEN — flagged in red on the panel]**
+**13. The furnace heat flux was wrong by an order of magnitude — because TWO
+coefficients were wrong and were hiding each other. [FIXED v2.2.1]**
 
-`q_flux = (T_flame − T_boil)/Z_total ≈ 2 348 kW/m²`. A real furnace waterwall runs
-at **100–300 kW/m²**. The cause is identified, not mysterious: `h_straight =
-1500 W/m²K` (2 025 after the Dean curvature correction) is a **water-side**
-boiling coefficient applied to the **gas** side, where a furnace gas film is
-nearer **30–80 W/m²K**.
+v2.2 shipped `q_flux ≈ 2 348 kW/m²` against a real furnace waterwall's
+**100–300**, flagged in red rather than hidden. Chasing it down found not one
+error but two:
 
-Correcting it would shrink the convective branch by 25–60×, which would restore
-radiation to dominance and reverse issue 12's conclusion a second time.
+  (a) `h_straight = 1500 W/m²K` is a **water-side** boiling coefficient, applied
+      to the **gas** side, where a furnace gas film is 10–80. 20–150× too high.
+  (b) `eps_flame = 0.85` implies, working back from h_rad = 386 W/m²K, a gas
+      emissivity of **0.88** — a flue gas radiating almost like a black body.
+      Real CO₂/H₂O gas at these partial pressures and beam lengths is 0.2–0.4.
+      2.5–4× too high.
 
-It has not been corrected. It is the single most common mistake in heat-transfer
-network modelling — taking a coefficient from the wrong side of a wall — and a
-reader who finds it by inspection has learned more than one who is handed the
-corrected number. Anyone building on this file should fix it before using the
-impedance panel quantitatively. This entry exists so that nobody mistakes it for
-an oversight.
+Because the two were overstated by very different factors, they partly cancelled
+in the flux SHARE — which is how the panel came to report **convection** as
+carrying 84% of the heat in a furnace, a conclusion no boiler engineer accepts.
+
+| setting | h_rad | h_gas | radiation share | q |
+|---|---|---|---|---|
+| v2.2 as shipped | 386 | 2025 | 16% | 2349 kW/m² |
+| convective film fixed only | 386 | 60 | 87% | 501 kW/m² |
+| emissivity fixed only | 131 | 2025 | 6% | 2137 kW/m² |
+| **both fixed (v2.2.1 default)** | **123** | **81** | **60%** | **233 kW/m²** |
+
+Both are now explicit sliders. The old values remain reachable at the top of
+their ranges, labelled, so the defect stays demonstrable — and the red warning
+still fires if you dial it back in.
+
+**14. There is no gas-emissivity correlation, and that is deliberate. [OPEN]**
+
+ε is a user input, not a computed quantity. The defensible routes (Hottel charts,
+Leckner 1972, or a WSGG fit such as Smith/Shen/Friedman 1982) all need coefficient
+tables that could not be obtained from an open source during this work. Inventing
+a plausible absorption coefficient would have produced smooth, confident,
+unfounded numbers — exactly what the epistemic tagging exists to prevent.
+
+So the model computes p·L for you (from the real fuel chemistry and λ) and tells
+you which chart to read ε off. Everything downstream of ε is exact algebra:
+h_rad ≡ ε_eff·σ·(T_g⁴−T_w⁴)/(T_g−T_w) is an identity, not an approximation.
+
+**Consequence anyone quoting a flux from this model must accept: you are quoting
+your own emissivity assumption.** The correct fix is to obtain the primary
+coefficient tables and implement the correlation.
+
+The gray-wall combination ε_eff = ε_gas·(ε_wall+1)/2 is a standard engineering
+approximation, not exact. [NUMERICAL]
+
+**15. The Dean factor may be on the wrong side of the wall as well. [OPEN]**
+
+The ×1.35 curvature correction describes flow INSIDE a curved tube (Dean 1927).
+It is applied to the furnace-side gas film when the helical geometry is selected.
+Whether that is defensible depends on whether the gas path is itself coiled,
+which this model does not know. Flagged rather than removed.
+
+**16. Wall thickness is not a design lever — and defect 13 made it look like one.
+[RESOLVED as a modelling question, worth keeping as a lesson]**
+
+At the corrected coefficients the gas film carries **98%** of total resistance and
+the wall **2%**. Doubling the wall 4→8 mm moves the flux ~3%. The flux is monotone
+in thickness, so there is no interior optimum: the binding limits are pressure
+stress and corrosion allowance.
+
+Under the v2.2 defect the wall carried 16% and looked tunable. The error was
+distorting a design intuition, not only a number. That is the more expensive kind
+of error and it is why the diagnostic was left visible for a version.
 
 ### 2.7 The trajectory tab (tab 12) — what it is and is not claiming
 

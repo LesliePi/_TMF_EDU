@@ -5,7 +5,7 @@
 **Technical and theoretical white paper — version 1.0**
 
 **Author:** Tatai László
-**Software artefact:** TMF Full Chain Analyser v2.2 (`TMF_FullChain_Simulator_v22.html`)
+**Software artefact:** TMF Full Chain Analyser v2.2.1 (`TMF_FullChain_Simulator_v22.html`)
 **Date:** 15 August 2026
 **Licence:** CC BY 4.0 (documentation and code)
 **Repository:** https://github.com/LesliePi/_TMF_EDU
@@ -33,7 +33,7 @@ Classical plant thermodynamics describes a working fluid by pointwise intensive 
 - The Rankine cycle is closed and entropy-consistent, on IAPWS-based saturation and superheat tables. Pump work heats the feedwater by the irreversible part only. Boiler duty equals ṁ·(h₁ − h₄) to machine precision.
 - The correct Carnot reference for a Rankine cycle is taken at the **entropic mean temperature of heat addition**, T̄ = (h₁ − h₄)/(s₁ − s₄), not at peak superheat. At the nominal point T̄ = 252.8 °C, giving η_Carnot = 39.5 % against 57.8 % if peak temperature is used — the difference between an honest and a flattering benchmark.
 - The exergy cascade is Gouy–Stodola accounting, not a discovery. It shows that of ~1 060 kW of fuel exergy, ~501 kW is destroyed in combustion alone, before the boiler is reached.
-- The heat-transfer network is a proper circuit: radiation **in parallel with** convection on the gas side, wall conduction in series. v2.2 corrected this from a naive series sum. The correction changes the total resistance by a factor of 6.39 **and inverts the conclusion**: the old panel reported radiation as dominant at 82 %; the correct circuit gives 84 % of the heat flux through convection.
+- The heat-transfer network is a proper circuit: radiation **in parallel with** convection on the gas side, wall conduction in series. v2.2 corrected this from a naive series sum (6.39× overstated). v2.2.1 then corrected both film coefficients, which had been wrong in ways that concealed each other. The furnace now runs at 233 kW/m² with radiation carrying 60 % — inside the realistic band, and with the mechanism a boiler engineer would expect. See §8.
 
 **What is conjecture.** The σ → work coupling, governed by one constant K = 0.15, tagged `[CONJECTURE]` on screen. At the default σ setting it costs 0.4 % of shaft work — below the resolution of most plant instrumentation, which the software says on screen. It becomes measurable only at σ_μ ≳ 0.35.
 
@@ -43,7 +43,7 @@ Classical plant thermodynamics describes a working fluid by pointwise intensive 
 2. **The single largest entropy source is the boiler ΔT, at 70.8 % of in-cycle generation.** Not the turbine (16.2 %), not the condenser (12.8 %). The temperature drop from a 1 462 °C flame to 300 °C steam is the price of the whole plant.
 3. **Marginal-gain ranking at the terminals is counter-intuitive.** +1 pp on the generator buys 3.15 kW; +1 pp on the boiler buys only 2.27 kW; −5 °C on the condenser buys 3.44 kW and is usually the cheapest. Sensitivity is computed by numerical forward difference through the whole chain, so clamps and phase changes are respected.
 
-**Known defect, published rather than hidden.** The furnace heat flux computes to ≈ 2 348 kW/m², against a realistic furnace value of 100–300 kW/m². The cause is identified: the convective coefficient h = 1 500–2 025 W/m²K is a **water-side** value applied to the **gas** side, where 30–80 W/m²K would be right. It is flagged in red on the panel and has deliberately **not** been silently corrected, because the diagnostic is more instructive than a quiet fix. See §10.1.
+**A defect found, published, and then fixed.** v2.2 shipped a furnace heat flux of 2 348 kW/m² against a realistic 100–300, flagged in red rather than hidden. Chasing it found **two** errors that had been concealing each other: a water-side convective coefficient applied to the gas side (20–150× too high) and a gas emissivity of 0.85 implying a near-black-body flue gas (2.5–4× too high). Because they pulled oppositely on the flux *share*, the panel had been reporting convection as dominant in a furnace. Both are now explicit inputs with the old values still reachable and labelled, so the defect remains demonstrable. See §8.2.
 
 **What would falsify the conjecture.** §11. Briefly: instrument a stage for inlet non-uniformity and exhaust quality simultaneously; the conjecture predicts they move in opposite directions at fixed inlet enthalpy. If exhaust quality does not rise as measured non-uniformity rises, the σ-coupling as calibrated is wrong.
 
@@ -325,11 +325,11 @@ The energy/exergy split in this table is the "112 % condensing boiler" explained
 
 ---
 
-## 8. The heat-transfer network — and a correction worth publishing
+## 8. The heat-transfer network — two corrections worth publishing
 
-### 8.1 What was wrong
+### 8.1 The circuit was wired in series
 
-Through v2.1 the model summed the three thermal resistances in series:
+Through v2.1 the model summed the three thermal resistances:
 
 > Z_series = Z_rad + Z_conv + Z_cond
 
@@ -337,32 +337,68 @@ This is wrong. Radiation and convection are two *parallel* paths from the same g
 
 > Z_gas = (1/Z_rad + 1/Z_conv)⁻¹ ,  Z_total = Z_gas + Z_cond
 
-### 8.2 What the correction changes
+The series sum overstated total resistance by 6.39×. In a series circuit the *largest* resistance dominates; in a parallel circuit the *smallest* one carries the flux. Getting the topology wrong therefore does not merely scale the answer — it can name the wrong mechanism.
 
-| Quantity | v2.1 (series) | v2.2 (correct) | Ratio |
-|---|---|---|---|
-| Total resistance (K/W) | 3.163 × 10⁻³ | 4.947 × 10⁻⁴ | **6.39× overstated** |
-| Reported dominant mechanism | Radiation, 82 % of resistance | Convection, **84 % of heat flux** | **inverted** |
+### 8.2 Both film coefficients were wrong, and they hid each other
 
-The conclusion did not merely shift; it reversed. Both values are still displayed side by side in the software so a reader can audit the change rather than take it on trust.
+Fixing the topology exposed a heat flux of **2 348 kW/m²** against a real furnace waterwall's 100–300. Tracking that down found not one error but two, pulling in opposite directions.
 
-The reason the conclusion inverts is instructive. In a series circuit the *largest* resistance dominates, so Z_rad = 2.589 × 10⁻³ looked decisive. In a parallel circuit the *smallest* resistance dominates the flux, and Z_conv = 4.938 × 10⁻⁴ is five times smaller. Radiation carries 16.0 % of the flux and convection 83.9 %. On the resistance side, the gas film accounts for 83.8 % and the wall 16.2 %.
+**The convective film was a water-side coefficient on the gas side.** `h_straight = 1500 W/m²K` is a boiling coefficient. A furnace gas film is 10–80 W/m²K. Overstated by a factor of 20–150.
 
-### 8.3 Rates
+**The gas emissivity was set to 0.85, implying a near-black-body gas.** Working backwards from the resulting `h_rad = 386 W/m²K` gives an implied ε of 0.88. Real CO₂/H₂O combustion gas at these partial pressures and beam lengths sits at 0.2–0.4. Overstated by 2.5–4×.
 
-The author's request was to display transfer *rates* alongside impedance, on the reasoning that the speed at which one energy form becomes another is as informative as the resistance to it. Wall response time constants, τ = ρ·c·t/h with steel at ρ = 7 850 kg/m³, c = 490 J/kg·K, t = 4 mm:
+Because the two errors were in the same direction on magnitude but different in size, they partially cancelled in the flux *share* — which is how the panel came to report convection as carrying 84 % of the heat in a furnace, a conclusion no boiler engineer would accept.
 
-| Path | h (W/m²K) | Flux share | τ (s) |
-|---|---|---|---|
-| Radiation | 386 | 16.0 % | 39.8 |
-| Convection | 2 025 | 83.9 % | 7.6 |
-| Conduction through wall (t²/2α) | — | series | 0.62 |
+| | h_rad | h_gas | radiation's flux share | q |
+|---|---|---|---|---|
+| v2.1 / v2.2 as shipped | 386 | 2 025 | 16 % | **2 349 kW/m²** |
+| convective film fixed only | 386 | 60 | 87 % | 501 kW/m² |
+| emissivity fixed only | 131 | 2 025 | 6 % | 2 137 kW/m² |
+| **both fixed (v2.2.1 default)** | **123** | **81** | **60 %** | **233 kW/m²** |
+| both fixed, optimistic end | 175 | 80 | 69 % | 290 kW/m² |
+| both fixed, conservative end | 87 | 30 | 74 % | 135 kW/m² |
 
-The three time constants span two orders of magnitude, and that spread is the physical content of the "which path" question. Conduction equilibrates in under a second; the convective film in seconds; the radiative coupling in tens of seconds. A transient — a load change, a fuel-feed interruption — therefore propagates through these three channels at visibly different speeds, and the slowest one sets the plant's thermal inertia.
+The realistic band is 100–300 kW/m². With both corrections the model lands at 233 and stays inside the band across the whole plausible range of both inputs. Radiation carries 60–75 %, which is what a furnace does.
 
-The on-panel formulation of the corrected picture: **energy does not choose a route — it takes both, split by conductance.**
+### 8.3 Why there is no emissivity correlation in the code
 
----
+The defensible ways to compute ε from p·L and T are Hottel's charts, Leckner's (1972) correlation, or a weighted-sum-of-gray-gases fit such as Smith, Shen and Friedman (1982). None of their coefficient tables could be obtained from an open source during this work.
+
+A plausible-looking absorption coefficient invented to fill that gap would have produced smooth, confident, unfounded numbers — the precise failure this project exists to avoid. So **ε is an explicit user input**, and the model instead computes p·L for you and says which chart to read. Everything downstream of ε is exact algebra:
+
+> h_rad ≡ q_rad/(T_g − T_w) = ε_eff · σ · (T_g⁴ − T_w⁴)/(T_g − T_w)
+
+That is an identity given ε, not an approximation. The gray-wall combination ε_eff = ε_gas·(ε_wall + 1)/2 is Hottel's standard engineering approximation and is tagged `[NUMERICAL]`.
+
+### 8.4 Geometry enters radiation through exactly one channel
+
+Gas radiation is volumetric — CO₂ and H₂O radiate in bands, and how much a volume emits depends on how far radiation travels through it. Hottel's mean beam length collapses any enclosure to one equivalent path:
+
+> L = 3.6 · V / A
+
+At the nominal furnace (V = 1.5 m³, A = 7.25 m²): L = 0.74 m, and with x_CO₂ = 11.2 %, x_H₂O = 10.7 % from the actual fuel and λ, p·L = 0.165 bar·m.
+
+Two consequences worth stating because both are counter-intuitive:
+
+**Residence time depends on volume alone.** τ = V/V̇. At fixed volume a cone, a cylinder and a sphere hold the gas for exactly the same time. Shape changes only the surface area, hence L, hence emissivity.
+
+**More surface always wins, so there is no interior optimum.** At fixed volume, growing A shrinks L and therefore ε — but sub-linearly, so the product ε·A rises monotonically. The binding constraint is flame clearance and cost, not a geometric optimum. This is the second time a single-variable geometry knob in this system has turned out monotone (wall thickness was the first), which suggests a general shape: **real optima here come from trade-offs between two competing costs, not from tuning one knob.**
+
+What the model deliberately does **not** do is predict how the gas flows. That requires a velocity field, turbulence and participating-media radiation — CFD, not a resistance network. A "cone angle" control that appeared to predict flow would be theatre.
+
+### 8.5 Rates
+
+Wall response time constants, τ = ρ·c·t/h with steel at ρ = 7 850 kg/m³, c = 490 J/kg·K, t = 4 mm, at the corrected coefficients:
+
+| Path | Z (m²K/W) | h (W/m²K) | Flux share | τ (s) |
+|---|---|---|---|---|
+| Radiation | 8.15 × 10⁻³ | 123 | 60 % | 125.4 |
+| Convection | 1.23 × 10⁻² | 81 | 40 % | 190.0 |
+| Conduction through wall (t²/2α) | 8.0 × 10⁻⁵ | 12 500 | series | 0.62 |
+
+Note what the correction did to the ladder: **Z_conv is now larger than Z_rad**, the reverse of v2.2. The gas film is 98 % of total resistance and the wall only 2 % — which is the quantitative reason wall thickness is not a design lever here (§10.1c).
+
+The on-panel formulation stands: **energy does not choose a route — it takes both, split by conductance.**
 
 ## 9. Verification
 
@@ -402,15 +438,29 @@ node FullChain_verify_v22.js
 
 The author's instruction for this document was to publish known errors rather than conceal them. The full register is in `FullChain_audit.md`; the material items follow.
 
-### 10.1 The furnace heat flux is implausible by an order of magnitude
+### 10.1 The furnace radiation model has no emissivity correlation — by choice
 
-The model computes q̇ = (T_flame − T_boil)/Z_total ≈ **2 348 kW/m²**. A real furnace waterwall runs at 100–300 kW/m². The cause is identified: the convective coefficient in use (h_straight = 1 500 W/m²K, 2 025 W/m²K after the Dean curvature correction) is a **water-side** boiling coefficient applied to the **gas** side, where a furnace gas film is nearer 30–80 W/m²K. Correcting it would reduce the convective branch by roughly 25–60×, which would restore radiation to dominance and reverse the §8.2 conclusion a second time.
+**Resolved, but not the way a limitations section usually resolves things.** The 2 348 kW/m² flux that v2.2 shipped and flagged is gone: with both film coefficients corrected the model runs at 233 kW/m², inside the realistic 100–300 band. §8.2 has the full account of the two errors.
 
-It has not been corrected. The value is flagged in red on the panel with the diagnosis attached. The reasoning: the error is a textbook example of the most common mistake in heat-transfer network modelling — using a coefficient from the wrong side of a wall — and a reader who finds it by inspection has learned more than one who is handed a corrected number. It is listed first here so that no one mistakes it for an oversight.
+What remains a limitation is what replaced them. Gas emissivity is **not computed** — it is an explicit user input. The rigorous route (Hottel's charts, Leckner 1972, or a WSGG fit such as Smith, Shen & Friedman 1982) needs coefficient tables that could not be obtained from an open source during this work, and inventing an absorption coefficient to fill the gap would have produced confident unfounded numbers. So the model computes p·L, states which chart to read ε from, and does exact algebra thereafter.
+
+The practical consequence: **anyone quoting a flux from this model is quoting their own emissivity assumption.** That is stated on the panel. The correct fix is to obtain the Leckner or WSGG coefficients from the primary sources and implement the correlation; until then the input stays explicit rather than hidden.
+
+The gray-wall combination ε_eff = ε_gas·(ε_wall + 1)/2 is a standard engineering approximation, not exact, and is tagged accordingly.
+
+### 10.1b The Dean factor may be on the wrong side of the wall too
+
+The Dean curvature correction (×1.35) describes flow *inside* a curved tube (Dean, 1927). It is currently applied to the furnace-side gas film when the helical geometry is selected. Whether that is defensible depends on whether the gas path is itself coiled, which the model does not know. Flagged rather than removed.
+
+### 10.1c Wall thickness is not a design lever, and the old defect made it look like one
+
+At the corrected coefficients the gas film is **98 %** of the total resistance and the wall **2 %**. Doubling the wall from 4 to 8 mm moves the flux by about −3 %. There is no interior optimum in wall thickness — the flux is monotone in it — so the binding limits are pressure stress and corrosion allowance, not heat transfer.
+
+This is worth recording because under the v2.2 defect the wall carried 16 % of the resistance and therefore looked like a tunable variable. The error was distorting not only a number but a design intuition.
 
 ### 10.2 The impedance panel's earlier "dominant path" language was wrong
 
-Corrected in v2.2 (§8). Recorded here because the framework's own vocabulary — "which path does the energy choose" — invited the error. Energy takes all available paths simultaneously. The vocabulary has been amended.
+Corrected in v2.2 (§8.1). Recorded here because the framework's own vocabulary — "which path does the energy choose" — invited the error. Energy takes all available paths simultaneously. The vocabulary has been amended.
 
 ### 10.3 σ_μ is a definition, not a measurement
 
@@ -489,6 +539,9 @@ APA 7th edition. The **Status** column records whether the citation was checked 
 | 7 | Dittus, F. W., & Boelter, L. M. K. (1930). Heat transfer in automobile radiators of the tubular type. *University of California Publications in Engineering, 2*(13), 443–461. | **Verified** |
 | 8 | Gibbs, J. W. (1873). A method of geometrical representation of the thermodynamic properties of substances by means of surfaces. *Transactions of the Connecticut Academy of Arts and Sciences, 2*, 382–404. | Unverified (volume/pages not checked) |
 | 9 | Gouy, G. (1889). Sur l'énergie utilisable. *Journal de Physique Théorique et Appliquée, 8*(1), 501–518. https://doi.org/10.1051/jphystap:018890080050101 | **Verified** |
+| 9b | Hottel, H. C., & Sarofim, A. F. (1967). *Radiative transfer*. McGraw-Hill. — source of the mean beam length L = 3.6 V/A and of the gray-wall (ε_w+1)/2 approximation | **Unverified** — standard attribution, but neither the edition nor the specific page for either result was checked |
+| 9c | Leckner, B. (1972). Spectral and total emissivity of water vapour and carbon dioxide. *Combustion and Flame, 19*(1), 33–48. | Partially verified — author, year and journal confirmed; **volume and pages unverified**, and the coefficient tables were **not obtainable** from an open source, which is why no emissivity correlation is implemented (§8.3, §10.1) |
+| 9d | Smith, T. F., Shen, Z. F., & Friedman, J. N. (1982). Evaluation of coefficients for the weighted sum of gray gases model. *Journal of Heat Transfer, 104*(4), 602–608. | Partially verified — citation is consistent across several independent citing works; **the original was not read and its coefficient table was not obtained** |
 | 10 | Incropera, F. P., DeWitt, D. P., Bergman, T. L., & Lavine, A. S. (2007). *Fundamentals of heat and mass transfer* (6th ed.). Wiley. | Unverified (edition not checked) |
 | 11 | Kotas, T. J. (1985). *The exergy method of thermal plant analysis*. Butterworths. ISBN 0-408-01350-8 | **Verified** |
 | 12 | Murray, C. D. (1926). The physiological principle of minimum work: I. The vascular system and the cost of blood volume. *Proceedings of the National Academy of Sciences, 12*(3), 207–214. https://doi.org/10.1073/pnas.12.3.207 | **Verified** |
